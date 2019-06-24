@@ -1,0 +1,470 @@
+/*
+ * 
+ */
+package virtualMemory;
+
+import control.AmnesiaControl;
+import cache.Cache;
+import amnesiaCommons.Block;
+import amnesiaCommons.Printer;
+import amnesiaCommons.Word;
+import amnesiaCommons.MainMemory;
+import amnesiaCommons.Memory;
+
+/**
+ * @author Guilherme Rodrigues Buzo, Vincius Gobbo Antunes de Oliveira
+ **/
+public class PageTable extends Memory
+{
+	private int wordSize;
+	private MainMemory pageTable;
+	private long registerOffSet;
+	private int physicalFrameAddressSize;
+	private long modifiedMask;
+	private long referencedMask;
+	private long residenceMask;
+	
+	// used in the replacements algorithms 
+	int resetCounter = 0, pagesInMainMemory = 0;
+		
+	public Cache instructionTLB;
+	public Cache dataTLB;			// this is the principal TLB.
+
+	private	int replacementAlgorithm;	// LRU or NRU.
+	private int[] flags;
+	
+	private byte[] pageTypeFlags;
+	
+	private final int maxFlagValue = 255;
+	
+	public static final byte LRU = 0;
+	public static final byte NRU = 1;
+	 
+	/*Criar pausa no momento da troca de página*/
+	private AmnesiaControl control; 
+	private Printer printer;
+	 
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all initial values
+	 * @param wordSize
+	 */
+	/* ************************************************************************ */
+	public PageTable(int numberOfPages, int wordSize, int blockSize, int ciclesPerAccess, int memorySize, 
+			MainMemory mainMemory, int replacementAlgorithm, int physicalFrameAddressSize, int pageSize,
+			Cache instructionTLB, Cache dataTLB){
+		
+		// inherited constructor.
+		super(wordSize,blockSize,ciclesPerAccess,memorySize);
+		
+		// initialize some local variables.
+		this.wordSize = wordSize;
+		this.pageTable = mainMemory;
+		
+		this.physicalFrameAddressSize = physicalFrameAddressSize;
+		this.replacementAlgorithm = replacementAlgorithm;		
+
+		// starts the replacement algorithm.
+		flags = new int[numberOfPages];
+		for (int i = 0; i < numberOfPages; ++i) flags[i] = 0x00; // 0 is the default value.
+		
+		pageTypeFlags = new byte[numberOfPages];
+		for ( int i = 0; i< numberOfPages; i++ ) pageTypeFlags[i] = 0x00;
+		
+		// prepare the residence, modified and referenced marks.
+		residenceMask = (long)1 << (physicalFrameAddressSize);
+		modifiedMask = (long)1 << (physicalFrameAddressSize+1);
+		referencedMask = (long)1 << (physicalFrameAddressSize+2);
+		
+		// set the register offset in the beginning of a page
+		while ( (numberOfPages % pageSize) != 0)
+			numberOfPages += 1;
+		this.registerOffSet = pageTable.getMemorySize() - numberOfPages;
+		this.dataTLB = dataTLB;
+		this.instructionTLB = instructionTLB;
+		control = null;
+		printer = new Printer();
+		
+		
+	}// constructor
+	
+	public boolean getPageType(int pageIndex) {
+		return pageTypeFlags[pageIndex]==0;
+	}
+	
+	public void writeAccessInfo() {
+		
+	}
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that loads a block from the page table.
+	 * @param address
+	 */
+	/* ************************************************************************ */
+	public Block load(Word address, int ispt) {
+		// add the register offset to the address.
+		Word physicalAddress = new Word(wordSize);
+		physicalAddress.setWord(address.getLongValue()+registerOffSet);
+		// block that loads the data came from the page Table in main memory
+		Block data = new Block(pageTable.getBlockSize(), wordSize);
+		if(control != null){
+			String location = String.format("Loading block from Page Table"); 
+			String addressString = String.format("\n%s", 
+				 printer.formatHexString(Long.toHexString(address.getLongValue())));
+			control.pause("pagetable|"+location+"|address", addressString );
+		}	
+		data.setBlock(pageTable.load(physicalAddress,ispt));
+		return data;
+	}
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that loads the real address of a page from the page table.
+	 * @param address
+	 */
+	/* ************************************************************************ */
+	public void load(Word address, Word wData)
+	{
+		Block data = load(address,1);
+		// number of bits representing the word inside the block
+//		int wordNumberOfBits = (int) ( Math.log( pageTable.getBlockSize() ) / Math.log( 2 ) );		
+		// word position inside the block
+//		int wordPosition;
+	
+		// makes a mask to extract the page Offset from the address
+//		long mask = 0x00;
+//		for(int i = 0; i < (wordNumberOfBits); i++)
+//		{
+//			mask = mask << 1;
+//			mask = mask | 0x01;
+//		}
+		// extract the word to be selected from the block
+//		wordPosition = (int)(address.getLongValue() & mask);
+		
+		wData.setWord(data.getWord((int)(address.getLongValue() % pageTable.getBlockSize())).getValue());
+		
+//		return data.getWord(wordPosition);
+	}
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that stores data in a given address of the page table
+	 * @param address
+	 */
+	/* ************************************************************************ */
+	public void store(Word address, Block data,  int ispt) {
+		// add the register offset to the address.
+		Word physicalAddress = new Word(wordSize);
+		physicalAddress.setWord(address.getLongValue()+registerOffSet);
+		// insert a new value in the page table (mainMemory).
+		if(control != null){
+			String location = String.format("Storing data in the Page Table"); 
+			String addressString = String.format("\n%s", 
+				 printer.formatHexString(Long.toHexString(address.getLongValue())));
+			control.pause("pagetable|"+location+"|address", addressString );
+		}	
+		pageTable.store(physicalAddress,data, ispt);
+		
+	}
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that stores data in a given address of the page table
+	 * @param address
+	 */
+	/* ************************************************************************ */
+	public void store(Word address, Word data)
+	{
+		Block block_data = load(address,1);
+
+		// number of bits representing the word inside the block
+//		int wordNumberOfBits = (int) ( Math.log( pageTable.getBlockSize() ) / Math.log( 2 ) );		
+		// makes a mask to extract the page Offset from the address
+//		long mask = 0x00;
+//		for(int i = 0; i < (wordNumberOfBits); i++)
+//		{
+//			mask = mask << 1;
+//			mask = mask | 0x01;
+//		}
+		// extract the word to be selected from the block
+//		int wordPosition = (int)(address.getLongValue() & mask);
+		
+		// alter the word in the block
+		block_data.setWord(data,(int)(address.getLongValue() % pageTable.getBlockSize()));
+		
+		store(address,block_data,1);
+		
+	}// store
+
+	/* ************************************************************************ */	
+	/**
+	 * Method that returns a page to be replaced. 
+	 * @param 
+	 */
+	/* ************************************************************************ */
+	public int getReplacementPosition()
+	{
+		int position = -1;
+		int residence;
+		//Word address = new Word(wordSize);
+		//Word entry = new Word(wordSize);
+		
+		switch ( replacementAlgorithm ) {
+			case	LRU:
+				
+				
+				for ( int i = 0; i<flags.length; i++ ){
+					// sets the address to be loaded.
+					//address.setWord((long)i);
+					// load the entry.
+					
+					//load(address,entry);
+					// get the reference and the modified flags.
+					//residence = (int)(entry.getLongValue() >>> (physicalFrameAddressSize)) & 0x1;
+					
+					// get the residence flag
+					residence = flags[i] & 0x01;
+
+					
+					// only pages that are in the main memory can be paged out
+					if (residence != 0){
+						if ( position > -1) {
+							if ( flags[i] > 0 && flags[i] < flags[position] ) 
+								position = i;
+						} else {
+							if ( flags[i] > 0 && flags[i] < maxFlagValue ) 
+								position = i;
+						}
+					}	
+				}	
+				break;
+			case	NRU:
+				/* Searching for the "NRU page" is very simple. In our architecture, we are storing the 
+				 * modified and reference bits like the following:
+				 *  
+				 * Reference	Modified	Residence	Frame
+				 * 1 bit		1 bit		1 bit		n bits
+				 * 
+				 * The NRU algorithm selects the page which must be paged verifying the modified and reference
+				 * bits, classifying a page into 4 classes:
+				 * 
+				 * 0 - Not referenced and not modified.
+				 * 1 - Not referenced and modified.
+				 * 2 - Referenced and not modified.
+				 * 3 - Referenced and modified.
+				 * 
+				 * The page classified with the smallest value, is subject to be withdrawn.
+				 * 
+				 * Our implementation logic consists to shift the page table entry for the physical
+				 * frame address size plus one and them comparing the resulting value with a memorized one.
+				 * The lowest is stored and is subject to be withdrawn from the main memory. We repeat this
+				 * operation until we reach the end of the page table. If we found a class zero page, we will
+				 * search all the pages if there are others class 0 pages, so that the page with the highest 
+				 * address is chosen.  
+				 * */
+				// prepare the flags, the iterator and the Word object used to access memory positions.
+				
+				
+				int nru_flag = 3, old_nru_flag, i = 0;
+				pagesInMainMemory = 0;
+				//Word address = new Word(wordSize);
+				
+				// creating frameAddressmask with physicalFrameAddressSize�s size
+				long frameAddressMask = 0x00;
+				for(int j = 0; j < (physicalFrameAddressSize); j++){						
+					frameAddressMask = frameAddressMask << 1;
+					frameAddressMask = frameAddressMask | 0x01;
+				}
+
+				do {				
+
+					
+					// get the residence flag
+					residence = flags[i] & 0x01;
+				
+					// only pages that are in the main memory can be paged out
+					if (residence != 0){
+
+						old_nru_flag = flags[i] >>> 1;
+						old_nru_flag = old_nru_flag & 3;
+						// compare if with have an smaller value. If so, we have a new page subject to be withdrawn.
+
+						if ( old_nru_flag <= nru_flag ) {
+							position = i;
+							nru_flag = old_nru_flag;
+						}
+						pagesInMainMemory++;
+					}
+					// don't forget to increment our iterator. Else, we have an infinite looping.
+					i++;
+					
+				} while ( i < flags.length );
+				
+				// updating the counter
+				resetCounter++;
+				
+				// reseting the reference flags if the counter 
+				if (resetCounter == pagesInMainMemory*2){
+					for(i = 0; i < flags.length; i++){
+						flags[i] = flags[i] & 0x3;
+						resetCounter = 0;
+						
+						// Updating page Table and TLBs
+						Word address = new Word(4);
+						// address of the i-th page
+						address.setWord(i);
+						Block content;
+						Word data;
+						boolean dataInTLB = false;
+
+						residence = flags[i] & 0x01;
+						// only pages that are in the main memory will be tested
+						if (residence != 0){
+							
+							if (dataTLB!=null) {							
+								if (dataTLB.searchData(address)){
+									dataInTLB = true;
+									// getting the content block from dataTLB
+									content = new Block(dataTLB.getBlockSize(), dataTLB.getWordSize());
+									content.setBlock(dataTLB.start(address));
+									
+									// getting the data that will be updated								
+									data = content.getWord( (int)(address.getLongValue()) % content.getBlockSize() );
+
+									// updating data with the new flags
+									data.setWord( ( data.getLongValue() & frameAddressMask ) | ( flags[i] << physicalFrameAddressSize ) );
+									
+									// storing new data into dataTLB
+									content.setWord(data, (int)( address.getLongValue() ) % content.getBlockSize() );									
+									dataTLB.start(address, content);
+									
+								}
+								
+								if (instructionTLB!=null) {
+									if (instructionTLB.searchData(address)){
+										dataInTLB = true;
+										// getting the content block from instructionTLB
+										content = new Block(instructionTLB.getBlockSize(), instructionTLB.getWordSize());
+										content.setBlock(instructionTLB.start(address));							
+
+										// getting the data that will be updated								
+										data = content.getWord( (int)(address.getLongValue()) % content.getBlockSize() );
+										
+										// updating data with the new flags
+										data.setWord( ( data.getLongValue() & frameAddressMask ) | ( flags[i] << physicalFrameAddressSize ) );
+										
+										// storing new data into instructionTLB
+										content.setWord(data, (int)( address.getLongValue() ) % content.getBlockSize() );
+										instructionTLB.start(address, content);
+									
+									}
+								
+								
+								}
+								
+								// if data is not in any TLB, we search it on pageTable	
+								if (!dataInTLB){
+									// getting the content block from instructionTLB
+									content = new Block(this.getBlockSize(), this.getWordSize());
+									content.setBlock(this.load(address,1));
+									
+									// getting the data that will be updated								
+									data = content.getWord( (int)(address.getLongValue()) % content.getBlockSize() );
+									
+									// updating data with the new flags
+									data.setWord( ( data.getLongValue() & frameAddressMask ) | ( flags[i] << physicalFrameAddressSize ) );
+									
+									// storing new data into instructionTLB
+									content.setWord(data, (int)( address.getLongValue() ) % content.getBlockSize() );
+									this.store(address, content, 1);
+									
+								}
+	
+							}
+						}							
+					}
+				}
+				
+				// the position variable has the page which must be withdrawn.
+				break;
+		}
+		return ( position!=0 ) ? position : 0;
+	}
+	
+
+
+	/* ************************************************************************ */	
+	/** 
+	 * Returns the flags of a page table entry.
+	 * @param position
+	 */
+	/* ************************************************************************ */	
+	public int getFlags(int position) {
+		return flags[position];
+	}// getReferenced.
+	
+	/**
+	 * Stores an entry at the page table.
+	 * @param physicalPageNumber The physical page number. When the residence bit evaluates to true, this can be any value.
+	 * @param virtualPageNumber The virtual page number.
+	 * @param residence Is the page in disk?
+	 */
+	public void setEntry(long physicalPageNumber, long virtualPageNumber, boolean residence) {
+		
+		Word		data = new Word(wordSize);
+		Word		virtualNumber = new Word(wordSize);
+		Block	blockData = new Block(pageTable.getBlockSize(),wordSize);
+		Word		address = new Word(wordSize);
+		
+		// converts from long to Word.
+		virtualNumber.setWord(virtualPageNumber);
+		
+		// apply the residence bit.
+		if ( residence ){ 
+			data.setWord(physicalPageNumber | residenceMask);
+			setFlags((int)virtualPageNumber, 0x01); // flags[virtualPageNumber = 001
+		}else{
+			if ((physicalPageNumber & residenceMask) != 0){
+				data.setWord(physicalPageNumber - residenceMask );
+			}else{
+				data.setWord(physicalPageNumber);
+			}
+		}
+			
+		// store the data into memory.
+//		store(virtualNumber,data);
+		address.setWord(registerOffSet + virtualPageNumber);
+		//System.out.println("address setEntry = " + address.getLongValue());
+		blockData.setBlock(pageTable.load(address,1));
+		blockData.setWord(data,(int)( (virtualPageNumber + registerOffSet )% pageTable.getBlockSize()));
+		pageTable.store(address,blockData,1);
+
+	}// initiatePageTable
+
+	public void setFlags(int position, int flag){
+		
+		flags[position] = flag;
+	}
+	
+	public long getRegisterOffset(){
+		return registerOffSet;
+	}
+	
+	public void print(){
+		pageTable.printContents();
+	}
+	
+	public String[] getContents(){
+		return pageTable.getContents((int)registerOffSet);
+		
+	}
+	
+	/**
+	 * Set control object for communication engine-control.
+	 * @param AmnesiaControl control - control object
+	 */
+	public void setControl(AmnesiaControl control){ 
+		this.control = control;
+	}
+}//class PageTable

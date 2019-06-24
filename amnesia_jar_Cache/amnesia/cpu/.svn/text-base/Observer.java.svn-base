@@ -1,0 +1,7 @@
+package cpu;
+
+public interface Observer {
+	
+	void update(int controlSigns);
+
+}

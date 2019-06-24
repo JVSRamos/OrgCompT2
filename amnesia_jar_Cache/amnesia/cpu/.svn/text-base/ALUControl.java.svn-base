@@ -1,0 +1,149 @@
+package cpu;
+import amnesiaCommons.*;
+
+/**
+ * 
+ * @author jordan
+ * alterado em 11/10 por Jordan
+ * atualizado em 17/10 por Jordan
+ */
+
+/**
+ * Implements an arithmetic and logic units  control. 
+ * It determine which instruction will be executed by the ALU.
+ */
+
+public class ALUControl implements Observer {
+	
+	// private atributes
+	private int opALU;                          // control sign coming control unit
+	private int funct;							// funct field coming from IR
+	private int ALUControl;						// control sing that�ll be sent to ALU
+
+	//OBJECTS
+	private ALU alu;							// ALU object that will receive ALUControl
+	private CPUInternalRegisters CPURegisters;  // Register IR is used here.
+	
+	
+	/**
+	 * Constructor.
+	 * Sets all the initial values for ALUControl 
+	 *
+	 */
+	public ALUControl(ALU alu, CPUInternalRegisters CPURegisters) {
+		
+		this.alu = alu;
+		this.CPURegisters = CPURegisters;
+	}
+	
+	
+	
+	/**
+	 * 
+	 * Method getALUControl
+	 * @param 
+	 * method returns the ALUControl value.
+	 */
+	public int getALUControl(){
+		return ALUControl;
+	}
+	
+	/**
+	 * 
+	 * Method update
+	 * @param controlSigns 
+	 * method that receives controlSings from the control unit and sets
+	 * ALUControl. ALUControl is sent to ALU to determine which instruction 
+	 * will be executed.
+	 * 
+	 */
+	
+	public void update(int controlSigns){
+		
+		// getting opALU field from controlSigns
+		opALU = (int)( ( controlSigns & 0x001C0000 ) >>> 18);
+		// getting funct field from IR
+		funct = (int)( ( CPURegisters.getIR().getLongValue() ) & 0x3F );; 
+		
+		// determining ALUControl according to opALU and funct fields		
+		switch (opALU){
+		case 0x0: //add
+			ALUControl = 0x2; 
+			break;
+		case 0x1: //sub
+			ALUControl = 0x6;
+			break;
+		case 0x2: // funct field decides
+			    switch (funct){
+			    case 0x20: //ADD (add)
+			    	ALUControl = 0x2;
+			    	break;
+			    case 0x21: // add uns (add uns)
+			    	ALUControl = 0x3;
+			    	break;
+			    case 0x24: // and
+			    	ALUControl = 0x0;
+			    	break;
+			    case 0x27: // NOR
+			    	ALUControl = 0xC;
+			    	break;
+			    case 0x25: // OR 
+			    	ALUControl = 0x1;
+			    	break;
+			    case 0x2A: // SLT
+			    	ALUControl = 0x7;
+			    	break;
+			    case 0x2B: // SLT uns
+			    	ALUControl = 0x8;
+			    	break;
+			    case 0x00: // SLL
+			    	ALUControl = 0xD;
+			    	break;
+			    case 0x02: // SRL 
+			    	ALUControl = 0xE;
+			    	break;
+			    case 0x22: //sub
+			    	ALUControl = 0x6;
+			    	break;
+			    case 0x23: //sub uns
+			    	ALUControl = 0x9;
+			    	break;
+			    case 0x1A: // Divide 
+			    	ALUControl = 0x4;
+			    	break;	
+			    case 0x1B: // divide uns 
+			    	ALUControl = 0x5;
+			    	break;
+			    case 0x18: // Mul 
+			    	ALUControl = 0xA;
+			    	break;
+			    case 0x19: // Mul uns 
+			    	ALUControl = 0xB;
+			    	break;
+			    }//end switch funct
+			    break;
+		case 0x3: //add uns
+			ALUControl = 0x3;
+			break;
+		case 0x4: // and
+			ALUControl = 0x0;
+			break;
+		case 0x5: // or
+			ALUControl = 0x1;
+			break;
+		case 0x6: // SLT
+			ALUControl = 0x7;
+			break;
+		case 0x7: // SLT uns
+			ALUControl = 0x8;
+			break;
+		}//end switch opALU
+		
+		// sending control to ALU
+		alu.setDataIn(ALUControl);
+		
+	}//end update
+	
+
+	
+}

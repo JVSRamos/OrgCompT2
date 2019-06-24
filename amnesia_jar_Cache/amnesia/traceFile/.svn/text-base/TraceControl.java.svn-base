@@ -1,0 +1,193 @@
+package traceFile;
+
+
+import java.util.Scanner;
+
+import control.AmnesiaControl;
+import virtualMemory.VirtualMemory;
+import cache.Cache;
+import amnesiaCommons.Block;
+import amnesiaCommons.MainMemory;
+import amnesiaCommons.Printer;
+import amnesiaCommons.Word;
+
+public class TraceControl{
+	
+	private Word dataIn;  // DATA TO WRITE IN MEMORY
+	private Word dataOut; // DATA RECEIVED FROM MEMORY
+	//private AccessInfo accessInfo;
+
+	private final int wordSize = 4;
+	private final int blockSize = 1;
+
+	
+	// VIRTUAL MEMORY, INSTRUCTION AND DATA CACHE AND MAIN MEMORY
+	// OBJECTS. 
+	private VirtualMemory virtualMemory;	
+		
+	private Cache instructionL1;
+	private Cache dataL1;	
+	private MainMemory mainMemory;	
+	   
+	private AmnesiaControl control;
+	private Printer printer;
+    Scanner input;
+	
+    //private long sizeTrace;
+    private int i;    
+    
+	public TraceControl()
+	{
+		dataIn = new Word(wordSize);  
+		dataOut = new Word(wordSize); 
+		printer = new Printer();
+		control = null;			
+		i = 0;
+	}		
+	
+	public void memoryAccess()
+	{
+		
+		
+		input = new Scanner(System.in);		
+		String access, aux;		
+		long auxAddress;
+		long stop;
+		
+
+		stop = control.getSizeTrace();
+		
+		while(i < stop)
+		{	
+			access = control.getInstructionLine(i);		
+			aux = control.getAddressLine(i);			
+			auxAddress = Long.parseLong(aux, 16);
+
+			i++;
+				
+			Word address = new Word(wordSize);
+
+			address.setWord(auxAddress);			
+			Block readData;		
+							
+			String virtualaddress = printer.formatHexString(Long.toHexString(address.getLongValue()));
+			
+			if ( (virtualMemory != null) && ((access.equals("0")) || (access.equals("1")) || (access.equals("2")) ) ) 
+			{
+
+				if(control != null){
+					String location = String.format("Starting memory access"); 
+					String addressString = String.format("\n%s\n%s", 
+							 virtualaddress,"Still not translated");
+					control.pause("memorycontrol|"+location+"|address", addressString );
+				}	
+				
+				//System.out.println("Entrou MemoriaVirtual");
+				// If virtual memory exists, the real address is obtained.
+				// the real address is word 0 from the Block returned by the virtualMemory.load()
+				if ((virtualMemory != null) && ((access.equals("0")) || (access.equals("1") || (access.equals("2")) )))
+				{	
+					//address = virtualMemory.load(address, (controlUnit.getControlSigns() == 0), (memWrite == 1)).getWord(0);
+					address = virtualMemory.load(address, (access.equals("1") == true), (access.equals("1") == true)).getWord(0);
+				}
+				
+				//checks if the virtual address is out of the total memory size
+				if (address.getLongValue() > (virtualMemory.getMemorySize() + mainMemory.getMemorySize())-1 || address.getLongValue() < 0){
+					System.err.printf("Trying to Access The Unexistent Memory Position ");
+					System.err.printf(printer.formatHexString(Long.toHexString(address.getLongValue())));
+					System.err.printf("\nPlease Check The Program File On The Following Line Where The Program Stopped\n");								
+				}	 
+			}
+				//checks if the address is out of the of the main memory range
+			else if(address.getLongValue() > mainMemory.getMemorySize()-1 || address.getLongValue() < 0){			
+				System.err.printf("Trying to Access The Unexistent Memory Position ");
+				System.err.printf(printer.formatHexString(Long.toHexString(address.getLongValue())));
+				System.err.printf("\nPlease Check The Program File On The Following Line Where The Program Stopped\n");			
+				
+			}
+			
+			if ( (control != null) && ((access.equals("0")) || (access.equals("1")) || (access.equals("2")) ) ){
+				String location = String.format("Starting memory access"); 
+				String addressString = String.format("\n%s\n%s", 
+						 virtualaddress,printer.formatHexString(Long.toHexString(address.getLongValue())));
+				control.pause("memorycontrol|"+location+"|address", addressString );
+			}	
+			
+			if (access.equals("0") || access.equals("2")) // read
+			{		  
+				
+					if (instructionL1 != null){// instruction and data caches splitted
+						if (access.equals("2")){					
+							// instruction cache
+							readData = instructionL1.start(address);							 
+						}
+						else{ // data cache	
+							readData = dataL1.start(address);
+						}
+					}
+					else
+					{ 
+						if (dataL1 == null)// without caches
+						{ 					
+							readData = mainMemory.start(address);
+						}
+						else // unified cache
+						{ 
+							readData = dataL1.start(address);
+						}
+					}														
+			}
+			else if (access.equals("1")) //write 
+			{	
+										
+				Block data = new Block(blockSize, wordSize);
+				dataIn.setWord(1);
+				
+				data.setWord(dataIn, 0);
+				
+				if (dataL1 == null)													
+					mainMemory.start(address, data);						
+				else						
+			        dataL1.start(address,data);						
+			}
+			else if (access.equals("4") || access.equals("5")){
+				
+				System.err.printf("Wrong Instruction\nPlease Check The Program File\n");// wrong instruction				
+			}
+			else {
+				System.err.printf("Wrong Instruction\nPlease Check The Program File\n");// wrong instruction
+				System.exit(1);			
+			}
+				
+		}
+	}
+
+	public void setDataCache(Cache cache){
+	    this.dataL1 = cache;
+    }
+
+    public void setInstructionCache(Cache cache){
+	    this.instructionL1 = cache;
+    }
+
+    public void setMainMemory(MainMemory mainMemory){
+	    this.mainMemory = mainMemory;
+    }
+
+    public void setVirtualMemory(VirtualMemory virtualMemory){
+	    this.virtualMemory = virtualMemory;
+    }
+    
+    public int getWordSize(){
+        return wordSize;
+    }
+
+    public int getBlockSize(){
+        return blockSize;
+    }
+    
+	public void setControl(AmnesiaControl control){	
+		this.control = control;
+	}	
+	
+}

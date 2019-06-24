@@ -1,0 +1,273 @@
+package cpu;
+import amnesiaCommons.*;
+
+/**
+ * 
+ * @author jordan
+ * alterado em 11/10 por Jordan
+ * atualizado em 17/10 por Jordan
+ */
+
+/**
+ * Implements an arithmetic and logic unit. 
+ * It executes addiction, subtraction, multiplication, division,
+ * left and right shifts, and, or, nor and set on less then 
+ * operations.
+ */
+
+
+public class ALU{
+	
+	//Private atributes
+	private Word sourceA;                // receives the content from mux ALUSourceA
+	private Word sourceB;                // receives the content from mux ALUSourceB
+	private Word hi;                     // word which content is sent to the Hi register
+	private Word lo;                     // word which content is sent to the lo register
+	private Word result;				 // word that keeps the result from ALU operations
+	private int ALUControl;              // Signal received from control unit to determine operations 
+	private int intA;					 // receive value from word sourceA
+	private int intB;					 //	receive value from word sourceb
+	private long longResult; 			 // long aux to keep unsigned operations result
+	private long longA;				 // long aux used in unsigned operations
+	private long longB;				 // long aux used in unsigned operations
+	private final int WORDSIZE = 32;     // wordsize in bits used in the unsigned operations
+	
+	//OBJECTS
+	//private ControlUnit controlUnit;
+	private Multiplexer BNE;			       // multiplexer BNE used in branchs operations
+	private Multiplexer ALUSourceA;            // ALU`s data source A 
+	private Multiplexer ALUSourceB;            // ALU`s data source b
+	private Multiplexer PCSource;	           // mux that receives jumps and branchs addresses from ALU
+	private CPUInternalRegisters CPURegisters; // registers ALUOut, Hi and Lo are used here. 
+
+	
+	/**
+	 * Constructor.
+	 * Sets all the initial values for ALU 
+	 *
+	 */
+	public ALU(Multiplexer BNE, Multiplexer ALUSourceA, Multiplexer ALUSourceB, Multiplexer PCSource, CPUInternalRegisters CPURegisters){
+		
+
+		this.BNE = BNE;
+		this.ALUSourceA = ALUSourceA;
+		this.ALUSourceB = ALUSourceB;
+		this.PCSource = PCSource;
+		this.CPURegisters = CPURegisters;
+		sourceA = new Word(4);
+		sourceB = new Word(4);
+		hi = new Word(4);
+		lo = new Word(4);
+		result = new Word(4);
+	}
+	
+	/**
+	 * 
+	 * Method setDataIn
+	 * @param ALUControl 
+	 * method that gets the sources and the control signs
+	 * for the ALU execution
+	 * 
+	 */
+	public void setDataIn(int ALUControl){
+		
+		// receives ALUControl
+		this.ALUControl = ALUControl;
+		// gets data from multiplexers ALUSourceA and ALUSourceb
+		sourceA = ALUSourceA.getData();
+		sourceB = ALUSourceB.getData();
+		// calls alu method.
+		alu();
+	}
+	
+	/**
+	 * 
+	 * Method alu
+	 * @param  
+	 * method that executes logic and arithmetics functions 
+	 * depending on the ALUControl 
+	 * 
+	 */
+	
+	private void alu(){
+		
+		// getting the values from words sourceA and sourceB
+		intA = (int)sourceA.getLongValue();
+		intB = (int)sourceB.getLongValue();
+
+		/* decoding ALUControl coming from the ControlUnit 
+		* and the funct field from IR to determinate the instruction.
+		* The result of the operation is set in the word result.
+		*/
+		switch (ALUControl){
+		case 0x0: //and
+			longResult = intA & intB;
+			result.setWord(longResult);
+		break;
+		
+		case 0x1: //or
+			longResult = intA | intB;
+			result.setWord(longResult);
+		break;
+		
+		case 0x2: //add
+			longResult = intA + intB;
+			result.setWord(longResult);
+		break;
+		
+		case 0x3: //add uns
+			// if intA or intB is < 0, the unsigned operation must add 2^32(in MIPS case(32bits)).
+			if (intA < 0) longA = (long) (intA + Math.pow(2, WORDSIZE));
+			else longA = intA;
+			if (intB < 0) longB = (long)(intB + Math.pow(2, WORDSIZE));			
+			else longB = intB;
+			
+			
+			longResult = longA + longB;
+			// unsigned operations uses the method setWordUnsigned() instead of setWord().
+			result.setWordUnsigned(longResult);
+		break;
+		
+		case 0x4: // divide
+			
+			// setting Hi
+			longResult = (intA % intB);
+			hi.setWord(longResult);
+			CPURegisters.setHi(hi);
+			// setting Lo
+			longResult = (int)(intA / intB);
+			lo.setWord(longResult);
+			CPURegisters.setLo(lo);
+		break; 
+		
+		case 0x5: // divide uns
+			// if intA or intB is < 0, the unsigned operation must add 2^32(in MIPS case(32bits)).
+			if (intA < 0) longA = (long) (intA + Math.pow(2, WORDSIZE));
+			else longA = intA;
+			if (intB < 0) longB = (long) (intB + Math.pow(2, WORDSIZE));
+			else longB = intB;
+			
+			// setting Hi
+			longResult = (longA % longB);
+			hi.setWordUnsigned(longResult);
+			CPURegisters.setHi(hi);
+			// setting Lo
+			longResult = (int)(longA / longB);
+			lo.setWordUnsigned(longResult);
+			CPURegisters.setLo(lo);
+		break;
+		
+		case 0x6: //sub
+		
+			longResult = intA - intB;
+			result.setWord(longResult);
+		break;
+		
+		case 0x7: // SLT
+		
+			if (intA < intB)
+			    longResult = 1;
+			else
+				longResult = 0;
+			result.setWord(longResult);
+		break;
+		
+		case 0x8: //slt uns
+			// if intA or intB is < 0, the unsigned operation must add 2^32(in MIPS case(32bits)).
+			if (intA < 0) longA = (long) (intA + Math.pow(2, WORDSIZE));
+			else longA = intA;
+			if (intB < 0) longB = (long) (intB + Math.pow(2, WORDSIZE));
+			else longB = intB;
+			
+			
+			if (longA < longB)
+			    longResult = 1;
+			else
+				longResult = 0;
+			result.setWord(longResult);
+		break;
+		
+		case 0x9: // sub uns
+			// if intA or intB is < 0, the unsigned operation must add 2^32(in MIPS case(32bits)).
+			if (intA < 0) longA = (long) (intA + Math.pow(2, WORDSIZE));
+			else longA = intA;
+			if (intB < 0) longB = (long) (intB + Math.pow(2, WORDSIZE));
+			else longB = intB;
+			
+			longResult = longA - longB;
+			result.setWordUnsigned(longResult);
+		break;
+		
+		case 0xA: // MUL
+			// setting Hi
+			longResult = (long)intA * (long)intB;
+			hi.setWord( (longResult >>> 32) & 0xFFFFFFFF);
+			CPURegisters.setHi(hi);
+			// setting Lo
+			lo.setWord(longResult & 0xFFFFFFFF);
+			CPURegisters.setLo(lo);
+		break;
+
+		case 0xB: // MUL uns
+			// if intA or intB is < 0, the unsigned operation must add 2^32(in MIPS case(32bits)).
+			if (intA < 0) longA = (long) (intA + Math.pow(2, WORDSIZE));
+			else longA = intA;
+			if (intB < 0) longB = (long) (intB + Math.pow(2, WORDSIZE));
+			else longB = intB;
+			
+			// setting Hi
+			longResult = (long)longA * (long)longB;
+			hi.setWordUnsigned( (longResult >>> 32) & 0xFFFFFFFF);
+			CPURegisters.setHi(hi);
+			// setting Lo
+			lo.setWordUnsigned(longResult & 0xFFFFFFFF);
+			CPURegisters.setLo(lo);
+		break;
+		
+		case 0xC: // NOR
+
+			longResult = ~(intA | intB);
+			result.setWord(longResult);
+		break;
+		
+		case 0xD: // SLL
+
+			longResult = intA << intB;
+			result.setWord(longResult);
+		break;
+		
+		case 0xE: // SRL
+
+			longResult = intA >>> intB;
+			result.setWord(longResult);
+		break;
+		} // end switch ALUControl
+		
+		if (longResult == 0){
+			//ALU�s zero = 1;
+			BNE.setData(0, 1); //zero
+			BNE.setData(1, 0); //~zero
+		}
+		else{
+			//ALU�s zero = 0;
+			BNE.setData(0, 0); //zero
+			BNE.setData(1, 1); //~zero
+		}
+		
+				
+		CPURegisters.setALUOut(result);
+		PCSource.setData(0, result);
+
+		
+	}
+	
+
+/*		
+	public long getlongResult(){
+		return longResult;
+	}
+	
+	public int getALUControl(){
+		return ALUControl;
+	}*/
+}

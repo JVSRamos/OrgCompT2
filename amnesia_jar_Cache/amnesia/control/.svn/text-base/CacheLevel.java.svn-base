@@ -1,0 +1,155 @@
+package control;
+
+import cache.Cache;
+
+/**
+ * Represents cache hierarchy in configured amnesia system 
+ */
+
+
+/**
+ * @author Bruno Henrique Oliveira
+ */
+public class CacheLevel{
+
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	private Cache dataCache;					// data cache object
+	private Cache instructionCache;				// instruction cache object
+	private Cache unifiedCache;					// unified cache object
+	private static int totalLevels = 0;			// total of cache levels 
+	private int level;							// this cache levels
+	private String levelType;
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */
+	// Constructor
+	/* ************************************************************************ */
+	/* ************************************************************************ */	
+	/**
+	 * Set default values for cache level
+	 */
+	/* ************************************************************************ */
+	public CacheLevel(){
+		dataCache = null;
+		instructionCache = null;
+		unifiedCache = null;
+		
+		// if exists at least 1 cache level object, then set cache levels to 1
+		if( totalLevels == 0){
+			++totalLevels;		
+		}
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */
+	// Methods
+	/* ************************************************************************ */
+	/* ************************************************************************ */	
+	/**
+	 * Set data cache
+	 * @param Cache
+	 */
+	/* ************************************************************************ */
+	public void setDataCache( Cache dataCache ){
+		// setting up data cache
+		this.dataCache = dataCache;
+		
+		// setting up level
+		this.level = totalLevels;
+		
+		levelType = "SPLITTED";
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Set instruction cache
+	 * @param Cache
+	 */
+	/* ************************************************************************ */
+	public void setInstructionCache( Cache instructionCache ){
+		// setting up data cache
+		this.instructionCache = instructionCache;
+		
+		// add 1 to cache level, because this level is complete
+		totalLevels++;
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Set unified cache
+	 * @param Cache
+	 */
+	/* ************************************************************************ */
+	public void setUnifiedCache( Cache unifiedCache ){
+		// setting up data cache
+		this.unifiedCache = unifiedCache;
+		
+		// setting up level
+		this.level = totalLevels;
+		
+		// add 1 to cache level, because this level is complete
+		totalLevels++;
+		
+		levelType = "UNIFIED";
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Get data cache
+	 * @return Cache
+	 */
+	/* ************************************************************************ */
+	public Cache getDataCache(){
+		return dataCache;
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Get instruction cache
+	 * @return Cache
+	 */
+	/* ************************************************************************ */
+	public Cache getInstructionCache(){
+		return instructionCache;
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Get unified cache
+	 * @return Cache
+	 */
+	/* ************************************************************************ */
+	public Cache getUnifiedCache(){
+		return unifiedCache;
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Get cache level
+	 * @return int
+	 */
+	/* ************************************************************************ */
+	public int getLevel(){
+		return level;
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Get cache level
+	 * @return int
+	 */
+	/* ************************************************************************ */
+	public String getType(){
+		return levelType;
+	}
+	/* ************************************************************************ */
+}

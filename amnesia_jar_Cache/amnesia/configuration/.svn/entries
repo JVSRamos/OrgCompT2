@@ -1,0 +1,52 @@
+8
+
+dir
+141
+https://svn.lasdpc.icmc.usp.br/svn/ProjetoAmnesia/trunk/Codigo/src/configuration
+https://svn.lasdpc.icmc.usp.br/svn/ProjetoAmnesia
+
+
+
+2008-11-05T14:37:30.830912Z
+111
+bruno.ubatuba
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+2e486128-2759-11dd-8ab8-ab4ed9ac3b46
+
+ValidateAmnesiaConfiguration.java
+file
+
+
+
+
+2010-06-06T13:03:49.031508Z
+b05ecf84277aca39aabbf03aa5baac66
+2008-10-14T23:19:38.940038Z
+102
+bruno.ubatuba
+
+AmnesiaConfiguration.java
+file
+
+
+
+
+2010-06-06T13:03:49.049508Z
+a07092cbd76074bcbcc6e8e5de35c901
+2008-11-05T14:37:30.830912Z
+111
+bruno.ubatuba
+

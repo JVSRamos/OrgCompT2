@@ -1,0 +1,235 @@
+/**
+ * Represents the smallest unit to be written or read.
+ */
+
+
+package amnesiaCommons;
+
+
+/**
+ * @author Bruno Henrique Oliveira
+ */
+public class Word {
+	
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	private byte word[];    		    // contents
+	private int wordSize;   		    // array size
+	private boolean modified;  		    // indicates if the stored data is modified
+	private boolean simulateUnsigned;			// indicates if the stored data is simulateUnsigned
+	/* ************************************************************************ */
+
+	
+	
+	/* ************************************************************************ */
+	// CONSTRUCTOR
+	/* ************************************************************************ */
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for Word
+	 * @param wordSize
+	 */
+	/* ************************************************************************ */
+	public Word( int wordSize ){
+		
+		this.wordSize = wordSize;
+		word = new byte[this.wordSize]; 
+        
+
+		// Set modified tag to zero
+		modified = false;
+		// Set simulateUnsigned tag to zero
+		simulateUnsigned = false;
+		
+		// iniciate all word with value zero
+		for( int i = 0; i < wordSize; ++i ){
+			word[i] = 0;			
+		}
+	}// contructor
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */
+	// METHODS
+	/* ************************************************************************ */	
+		
+	/* ************************************************************************ */	
+	/**
+	 * Set the data in word 
+	 * @param word[wordSize] (word size in bytes)
+	 */
+	/* ************************************************************************ */
+	public void setWord( byte[] word ){
+		
+		System.arraycopy(word,0,this.word,0,wordSize);		// set new word data
+		modified = true;									// set tag to modified
+		simulateUnsigned = false;									// set tag to signed
+	}
+	/* ************************************************************************ */	
+	/**
+	 * Set the data in word 
+	 * @param word[wordSize] (word size in bytes)
+	 */
+	/* ************************************************************************ */
+	public void setWordUnsigned( byte[] word ){
+		
+		System.arraycopy(word,0,this.word,0,word.length);		// set new word data
+		modified = true;										// set tag to modified
+		simulateUnsigned = true;										// set tag to simulateUnsigned
+	}
+	/* ************************************************************************ */
+	/* ************************************************************************ */	
+	/**
+	 * Set long data in word 
+	 * @param word[wordSize] (word size in bytes)
+	 */
+	/* ************************************************************************ */
+	public void setWord( long word ){
+	
+        this.word = longToByte( word, wordSize);		// set new word data
+	    modified = true;		                        // set tag to modified
+	    simulateUnsigned = false;								// set tag to signed
+	}
+	/* ************************************************************************ */	
+	
+	/**
+	 * Set the data in word 
+	 * @param word[wordSize] (word size in bytes)
+	 */
+	/* ************************************************************************ */
+	public void setWordUnsigned( long word ){
+		
+		this.word = longToByte( word, wordSize);		// set new word data
+		modified = true;								// set tag to modified
+		simulateUnsigned = true;								// set tag to simulateUnsigned
+	}
+		
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Returns the data storaged in word 
+	 * @return word[wordSize] (word size in bytes)
+	 */
+	/* ************************************************************************ */
+	public byte[] getValue( ){
+		byte[] word = new byte[wordSize];
+		System.arraycopy(this.word,0,word,0,wordSize);
+		return word;
+	}
+	/* ************************************************************************ */
+
+	
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Returns the data storaged in word 
+	 * @return word[wordSize] (word size in bytes)
+	 */
+	/* ************************************************************************ */
+	public long getLongValue( ){
+		return byteToLong( word, wordSize, simulateUnsigned );
+	}
+	/* ************************************************************************ */
+	
+	
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 *  Returns the size if the word
+	 * @return wordSize (in bytes)
+	 */
+	/* ************************************************************************ */
+	public int getWordSize( ){
+		return wordSize;
+	}
+	/* ************************************************************************ */
+
+	
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Returns true if data in word was modified and returns false if it was not 
+	 * modified
+	 * @return isModified
+	 */
+	/* ************************************************************************ */
+	public boolean isModified( ){
+		return modified;			
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Returns true if data in word is simulateUnsigned and returns false if it is not 
+	 *
+	 */
+	/* ************************************************************************ */
+	
+	public boolean isUnsigned( ){
+		return simulateUnsigned;			
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */
+	/**
+	 * Transform an integer into a byte array
+	 * @param int data, int dataSize
+	 * @return byte[]
+	 */
+	/* ************************************************************************ */	
+    private static byte[] longToByte( long data, int size ){
+
+        byte dado[] = new byte[size];
+        int mask = 0x00000000FF;
+        
+        // store in byte array the long word
+        for (int i = ( size - 1 ); i >= 0; --i){
+            dado[i] = (byte) ( mask & data);
+            data = data >>> 8;
+        }
+
+        return dado;
+    }
+    /* ************************************************************************ */	
+
+
+    
+    /* ************************************************************************ */
+	/**
+	 * Transform an byte array into an integer
+	 * @param byte[] data, int dataSize
+	 * @return int
+	 */    
+    /* ************************************************************************ */	
+    private static long byteToLong( byte[] data, int size, 
+    		boolean simulateUnsigned ){
+
+       
+        long answer = 0;
+        long longByte;
+        for (int i = 0; i < size; ++i){
+            
+            answer = answer << 8;
+            // auxiliar byte to use in long comparisson
+            byte aux =  data[i] ;
+        	
+            // if data is signed
+            if ((i == 0) & !(simulateUnsigned))
+        		answer = answer | aux;
+        	else{ // if is simulateUnsigned        		
+                // avoid signal extension from byte to long
+                longByte = aux & 0xFF;
+                // store data in answer
+                answer = answer | longByte;
+        	}
+        
+        }
+        return answer;
+    }
+    /* ************************************************************************ */	
+}

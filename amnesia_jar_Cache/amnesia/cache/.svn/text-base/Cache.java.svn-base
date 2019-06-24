@@ -1,0 +1,1069 @@
+package cache;
+
+import java.util.ArrayList;
+
+import control.AmnesiaControl;
+import amnesiaCommons.*;
+import virtualMemory.PageTable;
+import virtualMemory.VirtualMemory;
+
+
+/**
+ * Implements a cache memory behavior with variable set, block, word size, mapping function
+ * and replacement algorithm
+ */
+
+/**
+ * @author Bruno Henrique Oliveira
+ */
+
+
+public class Cache extends Memory{
+	
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	private String cacheType;						// for identification
+	private boolean isTLB;							//to know if it's a TLB 
+	private int numberOfSets;						// number of sets in this cache level
+	private Set contents[];							// array of sets
+	private int associativityLevel;					// set associativity level
+	private byte writePolicy;					// indicates mapping function and replacement
+	private byte replacementAlgorith;				// algorithm. possible values are shown in constants
+//	private MemoryControl memoryController;			// allow direct comunication with memory control
+	private Memory upperMemoryLevel;				// memory object for data transfer
+	private Memory lowerMemoryLevel;				// memory object for data transfer
+	private String[][] cacheContents;							
+	private AccessInfo accessInfo;
+	private AmnesiaControl control;
+	private int level;
+	/* ************************************************************************ */
+	private Printer printer;
+	/* ************************************************************************ */
+	// CONSTANTS
+	/* ************************************************************************ */
+	private final byte LRU  = 0;					// lru flag
+	private final byte FIFO  = 1;					// FIFO flag
+	private final byte writeBack  = 0;				// write back flag
+	private final byte writeThrough  = 1;			// write through flag	
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */
+	// CONSTRUCTOR
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for Cache
+	 * @param
+	 */
+	/* ************************************************************************ */
+	public Cache(int wordSize, int blockSize, int ciclesPerAccess, int memorySize, 
+				String cacheType, int associativityLevel, byte writePolicy, byte replacementAlgorithm /*, 
+				MemoryControl memoryController,*/ ) {
+		
+		// superclass contructor
+		super(wordSize, blockSize, ciclesPerAccess, memorySize );
+		
+		accessInfo = new AccessInfo();
+		printer = new Printer();
+		this.cacheType = cacheType;
+		this.writePolicy = writePolicy;
+		this.replacementAlgorith = replacementAlgorithm;
+//		this.memoryController = memoryController;
+		this.associativityLevel = associativityLevel;
+		numberOfSets = super.getMemorySize() / (associativityLevel * super.getBlockSize() );
+		
+		contents = new Set[numberOfSets];
+		
+		for(int i = 0; i < numberOfSets; ++i){
+			contents[i] = new Set(super.getBlockSize(), super.getWordSize(), this.associativityLevel);
+		}
+		isTLB = false;
+		
+		// setting control object to null
+		control = null; // if user set pause to true, control will identify himself. 
+	}
+	/* ************************************************************************ */
+	
+
+	
+	/* ************************************************************************ */
+	// METHODS
+	/* ************************************************************************ */	
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that starts cache load operation
+	 * @param
+	 */
+	/* ************************************************************************ */
+	public Block start( Word address ) throws ArrayIndexOutOfBoundsException {
+		
+		
+		
+		// inc number of accesses
+		accessInfo.incTotalAccess();
+		
+		// auxiliar line object
+		Block block = new Block(super.getBlockSize(), super.getWordSize());
+		
+		int upperMemoryLineSize;
+		
+		// if upper memory level is a memory controller
+		if(upperMemoryLevel == null){			
+			upperMemoryLineSize = 1;
+		}else if (upperMemoryLevel instanceof VirtualMemory){
+			// else if upper memory level is a Virtual Memory
+			upperMemoryLineSize = (int) ( (VirtualMemory) upperMemoryLevel ).getBlockSize();
+		}else{			
+			// else upper memory level is a cache memory
+			upperMemoryLineSize = (int) ( (Cache) upperMemoryLevel ).getBlockSize();
+		}
+		
+		// returning line object
+		Block upperLevelLine = new Block(upperMemoryLineSize, super.getWordSize());
+		
+		// separate set index in address
+		int index = getIndex( address.getLongValue() );
+		
+		// separate tag in address
+		long tag = getTag( address.getLongValue() );
+	
+		// search for tag in determined set
+		int blockPosition = contents[index].searchTag( tag );
+		
+		//pause system activated (show address)
+		if(control != null){
+			String blockPositionString;
+			
+			if(blockPosition == -1){
+				blockPositionString = "miss";
+			}else{
+				blockPositionString = "hit";
+			}
+			
+			String type;
+			if(cacheType.compareTo("UNIFIED") == 0){
+				if(isTLB == false)
+					type = "Accessing Unified Cache";
+				else type = "Accessing Unified TLB";
+			}else{
+				if(cacheType.compareTo("instructionCache") == 0){
+					if(isTLB == false)
+						type = "Accessing Instruction cache";
+					else type = "Accessing Instruction TLB";
+						
+				}else{
+					if(isTLB == false)
+						type = "Accessing Data Cache";
+					else type = "Accessing Data TLB";
+				}
+			}
+			
+			String location = String.format("%s -----> %s -----> load operation", type , "L" + level); 
+			String addressString = String.format("\n%s\n%s", 
+					 blockPositionString,printer.formatHexString(Long.toHexString(address.getLongValue())));
+			control.pause("loadcache|"+location+"|address", addressString );
+		}
+		
+		
+		
+		// if blockPosition == -1 then search for data in a lower memory level
+		if (blockPosition == -1){
+			
+			// inc number of cache miss
+			accessInfo.miss();
+			
+			// check empty space
+			int emptyPosition = contents[index].searchEmptyBlock();
+			
+			// if there is empty space bring block to this level, if
+			// there is not then send other block to lower memory level 
+			// and then save data in this level
+	
+            if (emptyPosition == -1){
+				
+				// choose new empty position by replacement algorithm
+				if (replacementAlgorith == FIFO){
+					emptyPosition = contents[index].FIFOSelected();		
+				}
+				
+				if (replacementAlgorith == LRU){
+					emptyPosition = contents[index].LRUSelected();	
+				}
+				
+				// saves select data if they are modified
+				// TLB will never enter the if statement because there is no mapping function in it
+				if(contents[index].isModified(emptyPosition) && writePolicy == writeBack){
+					
+					// make an address to save information already stored in cache
+					Word newAddress = mountAddress(contents[index].getTag(emptyPosition), index);	
+                                
+                    if (lowerMemoryLevel instanceof MainMemory){
+				        ((MainMemory) lowerMemoryLevel).start( newAddress, contents[index].getBlock(emptyPosition) );	
+                    }else{ 
+                    	if (lowerMemoryLevel instanceof PageTable){
+                    		((PageTable) lowerMemoryLevel).store( newAddress, contents[index].getBlock(emptyPosition),1 );
+                    	}else{
+                    		((Cache) lowerMemoryLevel).start( newAddress, contents[index].getBlock(emptyPosition) );
+                    	}
+                    }	                   
+				}
+				
+			}// if empty position = -1
+			
+			// search for data in a lower memory level
+			if (lowerMemoryLevel instanceof MainMemory){
+				block.setBlock( ((MainMemory) lowerMemoryLevel).start( address ) );
+				
+			}else 
+				if (lowerMemoryLevel instanceof PageTable){
+					if(control != null){
+						String location = String.format("Accessing Page Table..."); 
+						String addressString = String.format("\n%s", 
+								 printer.formatHexString(Long.toHexString(address.getLongValue())));
+						control.pause("pagetable|"+location+"|address", addressString );
+					}
+					block.setBlock( ((PageTable) lowerMemoryLevel).load( address ,1) );
+				}else{
+					block.setBlock( ((Cache) lowerMemoryLevel).start( address ) );
+			}
+		
+			// set line to valid and not modified ( same as lower level )
+			contents[index].setNotModified(emptyPosition);
+
+			// save data in determined position
+			contents[index].setBlock( emptyPosition, block );
+		
+                    
+			// mark block as new
+			if (replacementAlgorith == FIFO){
+				contents[index].markAdded(emptyPosition);
+			}
+			// now line position is a valid position
+			blockPosition = emptyPosition;
+
+            // insert new tag in cache
+            contents[index].insertTag(blockPosition, tag);
+
+						
+		}else{
+			
+			// check if data is valid 
+			if (contents[index].isValid(blockPosition) ){
+				
+				// since data in block is valid return block located in set position
+				block.setBlock( contents[index].getBlock(blockPosition) );
+						
+			}else{
+				
+				// if data is not available then search for data in a lower memory level
+				if (lowerMemoryLevel instanceof MainMemory){
+					block.setBlock( ((MainMemory) lowerMemoryLevel).start( address ) );	
+				}else{
+					block.setBlock( ((Cache) lowerMemoryLevel).start( address ) );
+				}
+				
+				// set line to valid and not modified ( same as lower level )
+				contents[index].setNotModified(blockPosition);
+				
+				// save data in determined position
+				contents[index].setBlock( blockPosition, block );
+				
+				// mark block as new
+				if (replacementAlgorith == FIFO){
+					contents[index].markAdded(blockPosition);
+				}
+				
+		
+			}//else (contents[index].isValid(linePosition) )
+		
+		}// else blockPosition == -1
+	
+		
+		// mark block as used
+		if (replacementAlgorith == LRU){
+			contents[index].markUsedLastAccess(blockPosition);
+		}
+		if(control != null && !getisTLB()){
+			
+			
+			String type = null;
+			if(cacheType.compareTo("UNIFIED") == 0){
+				
+					type = "Accessing Unified Cache";
+				
+			}else
+				if(cacheType.compareTo("instructionCache") == 0){
+					type = "Accessing Instruction TLB";
+				}
+				
+			else{
+			   type = "Accessing Data TLB";
+			}
+			
+		
+			
+
+			String location = String.format("%s -----> %s -----> store operation", type , "L" + level); 
+			String addressString = String.format("\n%s", 
+					 printer.formatHexString(Long.toHexString(address.getLongValue())));
+			control.pause("storecache|"+location+"|address", addressString );
+		}
+		upperLevelLine = mountUppperLevelLine( block, address );
+
+		return upperLevelLine;
+	}// load method
+	/* ************************************************************************ */
+	
+	
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that starts cache store operation
+	 * @param
+	 */
+	/* ************************************************************************ */
+	public void start( Word address, Block dataIn ) {
+		//Arrumar pausa do store na cache de dados
+		
+		// inc number of accesses
+		accessInfo.incTotalAccess();
+		
+		// separate set index in address
+		int index = getIndex( address.getLongValue() );
+		
+		// separate set index in address
+		long tag = getTag( address.getLongValue() );
+		
+		// search for tag in determined set
+		int blockPosition = contents[index].searchTag( tag );
+		
+		
+		
+		
+		
+		// if blockPosition == -1 then data is not avaliable in this memory level
+		if (blockPosition == -1){
+			
+			// inc number of cache miss
+			accessInfo.miss();
+			
+			// check empty space
+			int emptyPosition = contents[index].searchEmptyBlock();
+			
+			// if there is empty space bring block to this level, if
+			// there is not then send other block to lower memory level 
+			// and then save data in this level
+			
+			if (emptyPosition == -1){
+				
+				// choose new empty position by replacement algorithm
+				if (replacementAlgorith == FIFO){
+					emptyPosition = contents[index].FIFOSelected();		
+				}
+				
+				if (replacementAlgorith == LRU){
+					emptyPosition = contents[index].LRUSelected();	
+				}
+				
+				// saves select data if they are modified
+				// TLB will never enter the if statement because there is no mapping function in it
+				
+				if(contents[index].isModified(emptyPosition) && writePolicy == writeBack){
+						
+					// make an address to save information already stored in cache
+					Word newAddress = mountAddress(contents[index].getTag(emptyPosition), index);	
+						
+                    if (lowerMemoryLevel instanceof MainMemory){
+                    	
+				        ((MainMemory) lowerMemoryLevel).start( newAddress, contents[index].getBlock(emptyPosition) );	
+				    }else{
+				    	((Cache) lowerMemoryLevel).start( newAddress, contents[index].getBlock(emptyPosition) );
+				    }		
+				}
+			}// emptyPosition == -1
+			
+			// Line Object ( used to bring a lower memory level block )
+			Block block = new Block(super.getBlockSize(), super.getWordSize());
+			
+			// search for data in a lower memory level
+			if (lowerMemoryLevel instanceof MainMemory){
+				block.setBlock( ((MainMemory) lowerMemoryLevel).start( address ) );	
+			}else{
+				block.setBlock( ((Cache) lowerMemoryLevel).start( address ) );
+			}
+		
+			// set line to valid and not modified ( same as lower level )
+			contents[index].setNotModified(emptyPosition);
+
+			// save data in determined position
+			contents[index].setBlock( emptyPosition, block );
+			
+			// mark block as new
+			if (replacementAlgorith == FIFO){
+				contents[index].markAdded(emptyPosition);
+            }	
+			
+			// now line position is a valid position
+			blockPosition = emptyPosition;
+
+            // insert new tag in cache
+            contents[index].insertTag(blockPosition, tag);
+		}// if blockPosition = -1
+		
+		// check if data is valid 
+		if (!contents[index].isValid(blockPosition) ){
+			
+			// if data is not available then search for data in a lower memory level
+			if (lowerMemoryLevel instanceof MainMemory){
+				contents[index].getBlock(blockPosition).setBlock( ((MainMemory) lowerMemoryLevel).start( address ) );	
+			}else{
+				contents[index].getBlock(blockPosition).setBlock( ((Cache) lowerMemoryLevel).start( address ) );
+			}
+			
+			// set line to valid and not modified ( same as lower level )
+			contents[index].setNotModified(blockPosition);
+			
+			// creating a line (same size as this level) 
+			// this line contains the righ data to be stored
+			Block data = mountThisLevelLine( dataIn, address );
+			
+			// save data in determined position
+			contents[index].setBlock( blockPosition, data );			
+		}
+		
+		
+		// creating a line (same size as this level) 
+		// this line contains the right data to be stored
+		Block data = mountThisLevelLine( dataIn, address );
+				
+		if (writePolicy == writeThrough){
+			
+			if (lowerMemoryLevel instanceof MainMemory){
+				((MainMemory) lowerMemoryLevel).start( address, data );	
+			}else if (lowerMemoryLevel instanceof PageTable){
+				((PageTable) lowerMemoryLevel).store( address, data,1 );
+			}else{				
+				((Cache) lowerMemoryLevel).start( address, data );
+				
+			}		
+		}
+		 
+		// set line to valid and modified
+		contents[index].setModified(blockPosition);
+		
+		//pause system activated (show address)
+		if(control != null){
+			
+			
+			String type;
+			if(cacheType.compareTo("UNIFIED") == 0){
+				if(isTLB == false)
+					type = "Accessing Unified Cache";
+				else type = "Accessing Unified TLB";
+			}else{
+				if(cacheType.compareTo("instructionCache") == 0){
+					if(isTLB == false)
+						type = "Accessing Instruction cache";
+					else type = "Accessing Instruction TLB";
+						
+				}else{
+					if(isTLB == false)
+						type = "Accessing Data Cache";
+					else type = "Accessing Data TLB";
+				}
+			}
+			
+
+			String location = String.format("%s -----> %s -----> store operation", type , "L" + level); 
+			String addressString = String.format("\n%s", 
+					 printer.formatHexString(Long.toHexString(address.getLongValue())));
+			control.pause("storecache|"+location+"|address", addressString );
+		}
+		
+		
+		// store data in blockPosition
+		contents[index].setBlock(blockPosition, data);
+			
+	}
+	/* ************************************************************************ */
+	
+	
+	
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for Cache
+	 * @param
+	 */
+	/* ************************************************************************ */
+	public void writeAccessInfo() {
+		
+		
+	}
+	/* ************************************************************************ */
+	
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for Cache
+	 * @param
+	 */
+	/* ************************************************************************ */
+	public Block load(Word address,int ispt) {
+	
+		return null;
+	}
+	/* ************************************************************************ */
+	
+
+	
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for Cache
+	 * @param
+	 */
+	/* ************************************************************************ */
+	public void store(Word address, Block data,  int ispt ) {
+	
+		
+	}
+	/* ************************************************************************ */
+
+	
+	/* ************************************************************************ */	
+	/**
+	 * Separates set number
+	 * @param address
+	 * @return set index
+	 */
+	/* ************************************************************************ */
+	private int getIndex( long address ) {
+	
+		// set index
+		int index = 0;
+		
+		// mask used to separate set index
+		long mask = numberOfSets - 1;
+		    
+
+		// number of bits representing word wich word is referenced
+		int wordNumberOfBits = (int) ( Math.log( super.getBlockSize() ) / Math.log( 2 ) );
+	
+		// ignore bits that references word
+		address = address >>> wordNumberOfBits;
+		
+		// separate index form address
+		index = (int) (address & mask);
+		
+		return index;
+	}
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Separates tag form address
+	 * @param address
+	 * @return tag
+	 */
+	/* ************************************************************************ */
+	private long getTag( long address ) {
+	
+		// tag
+		long tag = 0;
+		
+		// number of bits representing word wich word is referenced
+		int wordNumberOfBits = (int) ( Math.log( super.getBlockSize() ) / Math.log( 2 ) );		
+		
+		// number of bits representing word wich word is referenced
+		int setNumberOfBits = (int) ( Math.log( numberOfSets ) / Math.log( 2 ) );		
+
+		// bits used to separate tag
+		int tagBits = 64 - setNumberOfBits - wordNumberOfBits;
+		
+		// mask used to separate tag
+		//long tagMask = (long) Math.pow(2, tagBits) - 1;
+		long tagMask = (long) ((2 << tagBits) - 1);
+		
+		// ignore bits that references word and set
+		address = address >>> ( wordNumberOfBits + setNumberOfBits ) ;
+		
+		// separate index form address
+		tag = (long) (address & tagMask);
+
+		return tag;
+	}
+	/* ************************************************************************ */
+
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Tranform block data specified by an address and block size into a smaller
+	 * or same size block
+	 * @param address, line
+	 * @return BlockLine
+	 */
+	/* ************************************************************************ */
+	private Block mountUppperLevelLine( Block block, Word address ){
+	
+		int upperMemoryLineSize;
+		// Checking upper memory level block size
+		if(upperMemoryLevel == null){ 
+			// if upper memory level is a memory controller
+//			upperMemoryLineSize = memoryController.getBlockSize(); 
+			upperMemoryLineSize = 1;
+		}else if (upperMemoryLevel instanceof VirtualMemory){
+			// else if upper memory level is a virtual memory
+			upperMemoryLineSize = (int) ( (VirtualMemory) upperMemoryLevel ).getBlockSize();
+		}else{
+			// else upper memory level is a cache memory
+			upperMemoryLineSize = (int) ( (Cache) upperMemoryLevel ).getBlockSize();
+		}
+	
+		if (upperMemoryLineSize < super.getBlockSize() ){
+			// number of bits representing word
+			long wordNumberOfBits = (long) ( Math.log( upperMemoryLineSize ) / Math.log( 2 ) );
+	
+			// mask to separate new line address
+			long mask = ( super.getBlockSize()/ upperMemoryLineSize ) - 1;
+			
+			// line address ignoring word bits
+			long newAddress = address.getLongValue() >>> wordNumberOfBits;
+			
+			// separates the bits that references the block in new address
+		    newAddress = ( mask & newAddress );
+		
+			// instanciate a new block with upper memory level atributes
+			Block newBlock = new Block( upperMemoryLineSize, super.getWordSize() );
+		
+			// shitf for new block address
+			long shift = ( newAddress * upperMemoryLineSize );
+			
+			// get all required word in block
+			for(int i = 0; i < upperMemoryLineSize; ++i ){
+			
+				// word position inside old block
+				long wordPosition = i + shift;
+				
+				// set word into new block
+				newBlock.setWord( block.getWord( (int) wordPosition ) , i );
+			}//for
+			
+			return newBlock;
+		}else{
+			if (upperMemoryLineSize > super.getBlockSize() ){
+				// throws BlockSizeException 
+			} 
+			// else means that memory line size is the same and 
+			// a there is no size treatament
+		}
+	 
+		return block;
+	}
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Tranform block data specified by an address and block size into a bigger
+	 * or same size block
+	 * @param data, blockPosition
+	 * @return BlockLine
+	 */
+	/* ************************************************************************ */
+	private Block mountThisLevelLine( Block data, Word address ){
+	
+		// AQUI NUM PODE SER LOAD WORD PRA NAO AUTERAR AS VARIAVEIS DE CONTROLE DE 
+		// ACESSO
+		//BlockLine auxLine = this.start(address);
+		
+		if (data.getBlockSize() < super.getBlockSize() ){	
+
+			// auxiliar line object
+			Block auxLine = new Block(super.getBlockSize(), super.getWordSize());
+		
+			// separate set index in address
+			int index = getIndex( address.getLongValue() );
+		
+			// separate tag in address
+			long tag = getTag( address.getLongValue() );
+		
+			// search for tag in determined set
+			int blockPosition = contents[index].searchTag( tag );
+		
+			// at this time blockPosition will be always a valid position
+			// since data in block is valid returns block located in set position
+			auxLine.setBlock( contents[index].getBlock(blockPosition) );
+		
+
+			// number of bits representing word
+			long wordNumberOfBits = (long) ( Math.log( data.getBlockSize() ) / Math.log( 2 ) );
+	
+			// mask to separate new block address
+			long mask = ( super.getBlockSize()/ data.getBlockSize() ) - 1;
+			
+			// block address ignoring word bits
+			long newAddress = address.getLongValue() >>> wordNumberOfBits;
+			
+			// separates the bits that references the block in new address
+                        newAddress = ( mask & newAddress );
+		
+			// shitf for new block address
+			long shift = ( newAddress * data.getBlockSize() );
+			
+			// get all required word in block
+			for(int i = 0; i < data.getBlockSize(); ++i ){
+			
+				// word position inside old block
+				long wordPosition = i + shift;
+				
+				// set word into new block
+				auxLine.setWord( data.getWord(i), (int) wordPosition );
+			}//for
+			
+			return auxLine;
+		}else{
+			if (data.getBlockSize() > super.getBlockSize() ){
+				// throws BlockSizeException 
+			} 
+			// else means that memory block size is the same and 
+			// a there is no size treatament
+		}
+		
+		return data;
+	}
+	/* ************************************************************************ */	
+
+
+        /* ************************************************************************ */
+        /**
+         *   * set the upper memory level object
+         *       * @param upperMemoryLevel
+         *           */
+        /* ************************************************************************ */
+        public void setUpperMemoryLevel( Memory upperMemoryLevel ){
+            // verify if cache level has a upper memory level 
+            //      // (if upper  memory level == null then it comunicates directly with memory control
+            if (upperMemoryLevel != null){
+            	if (upperMemoryLevel instanceof Cache) {
+            		this.upperMemoryLevel = (Cache) upperMemoryLevel;
+            	}else{
+                    if (upperMemoryLevel instanceof VirtualMemory){
+            		this.upperMemoryLevel = (VirtualMemory) upperMemoryLevel; 
+                    }
+            	}
+            }
+
+        }
+        /* ************************************************************************ */
+
+        /* ************************************************************************ */
+        /**
+         * set the lower memory level object
+         * @param lowerMemoryLevel
+         */
+        /* ************************************************************************ */
+        public void setLowerMemoryLevel( Memory lowerMemoryLevel ){
+ 
+            // verify if lower memory level is the main memory, the page table or another cache
+            if (lowerMemoryLevel instanceof MainMemory ){
+                this.lowerMemoryLevel = (MainMemory) lowerMemoryLevel;
+            }else{
+                if (lowerMemoryLevel instanceof PageTable){
+            	    this.lowerMemoryLevel = (PageTable) lowerMemoryLevel;
+                }else{
+                    this.lowerMemoryLevel = (Cache) lowerMemoryLevel;
+                }
+            }
+
+        }
+        /* ************************************************************************ */
+
+        /* ************************************************************************ */
+        /**
+         * Mount address for lower level data saving
+         * @param tag, index
+         * @return Word - new address
+         */
+        /* ************************************************************************ */
+        private Word mountAddress(long tag, int index){
+            
+            Word address = new Word(super.getWordSize());
+            
+            long newAddress = 0;
+            
+            // copy tag into new address
+            newAddress = newAddress | tag;
+
+            // find index number of bits
+            long indexNumberOfBits = (long) ( Math.log( numberOfSets ) / Math.log(2) );
+
+            // shift the index number of bits, this is necessary to insert the index
+            // into the new address
+            newAddress = newAddress << indexNumberOfBits;
+
+            // copy index into new address
+            newAddress = newAddress | index;
+
+            // find word number of bits
+            long wordNumberOfBits = (long) ( Math.log( super.getBlockSize() ) / Math.log( 2 ) );		
+
+            // shift addres word number of bits
+            newAddress = newAddress << wordNumberOfBits;
+
+            // store newAddress in Word object
+            address.setWord(newAddress);
+
+            return address;
+        }
+
+        /* ************************************************************************ */
+        /* ************************************************************************ */
+        /**
+         * Returns Cache Type
+         * @return String
+         */
+        /* ************************************************************************ */
+        public String getType(){
+            return cacheType;
+        }
+
+        /* ************************************************************************ */
+
+        /* ************************************************************************ */
+        /**
+         * Return upper memory level object
+         * @return Memory
+         */
+        /* ************************************************************************ */
+        public Memory getUpperMemoryLevel(){
+            return upperMemoryLevel;
+        }
+        /* ************************************************************************ */
+
+        /* ************************************************************************ */
+        /**
+         * Return upper memory level object
+         * @return Memory
+         */
+        /* ************************************************************************ */
+        public Memory getLowerMemoryLevel(){
+            return lowerMemoryLevel;
+        }
+        /* ************************************************************************ */
+        
+
+        /* ************************************************************************ */	
+    	/** 
+    	 * Return associativity level value
+    	 * @return int - associativity level
+    	 */
+    	/* ************************************************************************ */
+        public int getAssociativityLevel(){
+        	return associativityLevel;
+        }
+      	/* ************************************************************************ */
+        
+        
+        
+        /* ************************************************************************ */	
+    	/** 
+    	 * Method getNumberOfSets
+    	 * Return number of sets value
+    	 * @return int - associativity level
+    	 */
+    	/* ************************************************************************ */
+        public int getNumberOfSets(){
+        	return numberOfSets;
+        }
+        
+        /* ************************************************************************ */
+        /**
+         * Transform cache contents into a matrix of strings, so interface can read it.
+         * @return String[][] - Cache contents
+         */
+        public String[][] getCacheContents(){
+
+        	int index; // index used to fill the cacheContents vector
+        	cacheContents = new String[numberOfSets][associativityLevel * (3 + super.getBlockSize()) ];
+
+        	
+        	
+        	Set auxSet = new Set(super.getBlockSize(), super.getWordSize(), this.associativityLevel);
+
+            for(int i = 0; i < numberOfSets; ++i){  
+            	index = 0;
+                for (int j = 0; j < associativityLevel; j++){
+                	
+                	// adds the tag of each set in the vector.
+                	cacheContents[i][index] = Long.toString(contents[i].getTag(j));
+                	index += 1;
+                	cacheContents[i][index] = Long.toString(contents[i].getFlag(j));
+                	index += 1;
+                	
+                	auxSet.setBlock( j, contents[i].getBlock(j));                 
+                	for(int k = 0; k < super.getBlockSize(); ++k){
+                    
+                		cacheContents[i][index] = Long.toString(auxSet.getBlock(j).getWord(k).getLongValue());
+                		index += 1;
+                    }                
+                        
+                	cacheContents[i][index] = "/";
+                    index += 1;
+                }
+            
+            }
+           
+            return cacheContents;
+        }
+
+        /* **********************************************************************/
+
+        
+        /* ************************************************************************ */        
+        /** 
+         * Invalidates address when a page is no longer on main memory
+         * @param Word address - address that will be invalidated
+         * @param int pageSize - size of pages
+         */
+        public void invalidateBlocks( Word address, int pageSize){
+        	int numberOfBlocks = pageSize/getBlockSize();
+        	
+        	for(int i = 0; i < numberOfBlocks; ++i){
+        		
+        		Word invalidAddress = new Word(getWordSize());
+        		invalidAddress.setWord(address.getLongValue() + (i * getBlockSize()));
+        		        		
+        		// separate set index in address
+				int index = getIndex( invalidAddress.getLongValue() );
+				
+				// separate tag in address
+				long tag = getTag( invalidAddress.getLongValue() );
+			
+				// search for tag in determined set
+				int blockPosition = contents[index].searchTag( tag );
+				
+				if(blockPosition != -1){
+					// checking data consistency
+					if( (this.writePolicy == writeBack) && 
+							contents[index].getBlock(blockPosition).checkModified()){
+						
+						if(lowerMemoryLevel instanceof MainMemory){
+							((MainMemory) lowerMemoryLevel).start( address, contents[index].getBlock(blockPosition) );
+						}else{
+							if(lowerMemoryLevel instanceof Cache){
+								((Cache) lowerMemoryLevel).start( address, contents[index].getBlock(blockPosition) );
+							}else{
+								//ERROR
+							}
+						}
+						
+					}
+					
+					contents[index].setInvalid(blockPosition);
+				}
+				
+				
+        	}
+        }
+		/* ************************************************************************ */
+        
+    	/* ************************************************************************ */	
+    	/**
+    	 * Get number of CPU cicles spent in cache
+    	 * @return int - number of cpu cicles 
+    	 */
+    	/* ************************************************************************ */
+    	public int getTotalCicles(){
+    		return super.getCiclesPerAccess() * accessInfo.getTotalAccess();
+    	}
+    	/* ************************************************************************ */
+    	
+
+    	/* ************************************************************************ */	
+    	/**
+    	 * Get number of CPU cicles spent in main memory
+    	 * @return int - number of main memory access 
+    	 */
+    	/* ************************************************************************ */
+    	public int getNumberOfAccess(){
+
+    		return accessInfo.getTotalAccess();
+    	}
+    	/* ************************************************************************ */
+        
+    	/* ************************************************************************ */	
+    	/**
+    	 * Get hit rate
+    	 * @return float - hit rate 
+    	 */
+    	/* ************************************************************************ */
+    	public float getHitRate(){
+
+    		return accessInfo.getHitRate();
+    	}
+    	/* ************************************************************************ */
+
+    	
+    	/**
+    	 *  Search data into cache
+    	 * @return boolean - true if the address is in the cache, or false if it isn't  
+    	 */
+    	
+    	/* ************************************************************************ */   	
+    	public boolean searchData( Word address){ 
+    		
+    		//separate set index in address
+    		int index = getIndex( address.getLongValue() );
+    		
+    		// separate tag in address
+    		long tag = getTag( address.getLongValue() );
+    	
+    		// search for tag in determined set
+    		int blockPosition = contents[index].searchTag( tag );
+    		
+    		// if blockPosition == -1 then search for data in a lower memory level
+    		if (blockPosition == -1){
+    			return false;
+    		}
+    		return true;
+    	}
+    	/* ************************************************************************ */
+    	
+    	/**
+    	 * Set control object for communication engine-control.
+    	 * @param AmnesiaControl control - control object
+    	 */
+    	public void setControl(AmnesiaControl control){ 
+    		this.control = control;
+    	}
+    	/* ************************************************************************ */
+    	
+    	public void setType(String type){
+    		
+    		this.cacheType = type;
+    		
+    	}
+    	
+    	public void setLevel(int level){
+    		this.level = level;
+    	}
+    	
+
+    	public void setisTLB(boolean isTLB){
+    			this.isTLB = isTLB;
+    		
+    	}
+    	
+    	public boolean getisTLB(){
+    			return this.isTLB;
+    	}
+}   	

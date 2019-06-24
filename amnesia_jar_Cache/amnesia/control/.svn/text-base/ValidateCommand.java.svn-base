@@ -1,0 +1,619 @@
+package control;
+
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.Iterator;
+import amnesiaCommons.Printer;
+
+
+
+
+
+/**
+ * 
+ * @author brunohen
+ *
+ */
+public class ValidateCommand {
+
+	// Atributes
+	private Hashtable<String, Command> amnesiaCommands;
+	private Printer printer;
+	
+	public ValidateCommand(Printer printer){
+		// hash table where commands are stored
+		amnesiaCommands = new Hashtable<String, Command>();
+		
+		// setting output buffer for error messages
+		this.printer = printer;
+		
+		// adding possible Amnesia commands
+		addCommands();
+	}
+	
+	public Command getManPage(String command){
+		// formating string
+		command = command.trim();		
+		// Get command model in hash table
+		Command amnesiaCmd = amnesiaCommands.get( command.toUpperCase() );
+		
+		return amnesiaCmd;
+	}
+	
+	/**
+	 * 
+	 * @param commandString
+	 * @return
+	 */
+	public Command validate(String commandString){
+		// Create command entry 
+		Command commandEntry = new Command(commandString);
+		
+		// Get command model in hash table
+		Command amnesiaCmd = amnesiaCommands.get( commandEntry.getCommand() );
+		
+		// check if command exists
+		if(amnesiaCmd == null){
+			printer.setError("Command doens't exist");			
+			return null;
+		}else{
+			// setting command Entry code
+			commandEntry.setCode(amnesiaCmd.getCode());
+		}
+		
+		// get total of possible parameters
+		int totalOfParameters = amnesiaCmd.getTotalOfParameters();
+		
+		// verify all possible parameters in commandEntry
+		for(int i = 0; i < totalOfParameters; ++i){
+			
+			// get parameter from model
+			String modelParameter = amnesiaCmd.getParameter(i);
+	
+			// fist parameter		
+			String firstParameter = modelParameter.split("\\ ")[0];
+			
+			// verify if parameter exists
+			String parameter = commandEntry.searchParameter(firstParameter);
+			
+			// check if parameter is mandatory
+			if( amnesiaCmd.isMandatory(i) &&  (parameter == null) ){
+				printer.setError(modelParameter + " is mandatory in " + amnesiaCmd.getCommand() + " command.");				
+				return null;
+			}
+			
+			// if parameter exists validate it
+			if(parameter != null){
+				// separating parameter flags
+				String parameterFlags[] = modelParameter.split("\\ ");
+				
+				// validate all parameters for this flag
+				for(int j = 0; j < parameterFlags.length; ++j){
+					
+					// checking if data type needs validation
+					if(parameterFlags[j].startsWith("%")){
+						
+						// get data type
+						char dataType = parameterFlags[j].charAt(1);
+						
+						switch(dataType){
+							
+							case 'd':// verify if data is an integer
+								// get splitted parameters
+								String integerParameter[] = parameter.split("\\ ");
+								
+								// check if parameter is there
+								if(j >= integerParameter.length){
+									printer.setError("Expected integer in "+ modelParameter +" of '"+ commandString +"'" );
+									return null;
+								}
+								
+								// try to transform into an integer
+								try{
+									Integer.parseInt( integerParameter[j] );
+								}catch(NumberFormatException formatException){
+									printer.setError("Expected integer for %d in parameter " + modelParameter + " of '" + commandString + "'");
+									return null;
+								}
+								break;
+							
+							case 's':// String
+								// get splitted parameters
+								String stringParameter[] = parameter.split("\\ ");
+								
+								// check if parameter is there
+								if(j >= stringParameter.length){
+									printer.setError("Expected string in "+ modelParameter +" of '"+ commandString +"'" );
+									return null;
+								}
+								
+								break;
+							
+							case 'b':// verify if data is an boolean
+								// get splitted parameters
+								String booleanParameter[] = parameter.split("\\ ");
+								
+								// check if parameter is there
+								if(j >= booleanParameter.length){
+									printer.setError("Expected boolean in "+ modelParameter +" of '"+ commandString +"'" );
+									return null;
+								}
+								
+								
+								// verify string = true or false
+								if( ( booleanParameter[j].toUpperCase().compareTo("FALSE") != 0 ) || 
+									( booleanParameter[j].toUpperCase().compareTo("TRUE") != 0) ){
+									printer.setError("Expected boolean for %b in paramter " + modelParameter + " of " + commandString);
+									return null;
+								}
+								break;
+						}
+						
+					}
+				}
+			}
+			
+			
+		}
+		// check if there were no parameter left behind
+		if(!commandEntry.allParametersChecked()){
+			printer.setError("Invalid parameter at " + commandString);
+			return null;
+		}
+			
+		return commandEntry;
+	}
+	
+	public void addCommands(){
+				
+		// Strings to set up commands 
+		String commandString;
+		String mnemonicString;
+		// Command to be created
+		Command command;
+		// command code
+		int code = 0;
+		// Descriptions (commands and parameters)
+		String descriptions;
+		
+		///////////////////////////////////////////////////////////////
+		// Load Program
+		command = new Command();
+		commandString = "LOADPROGRAM";
+		mnemonicString = "LP";
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("LoadProgram - Load binary program into main memory");
+		command.setCommandDescription(descriptions); 
+		// setting command code
+		command.setCode(code++);
+		// program file name
+		command.addParameter("%s", true);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n%s\n",
+				"%s\t - binary file name",
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);		
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// adding mnemonic
+		command.setMnemonic(mnemonicString);
+		amnesiaCommands.put(mnemonicString, command);
+		///////////////////////////////////////////////////////////////
+		
+		///////////////////////////////////////////////////////////////
+		// Man
+		command = new Command();
+		commandString = "MAN";
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("Man - Display manual pages for Amnesia commands.");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// configuration file name
+		command.addParameter("%s", true);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n%s\n",
+				"%s\t - Amnesia command",
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);
+		// adding command to amnesiaCommands		
+		amnesiaCommands.put(commandString, command);
+		// setting no mnemonics to this command
+		command.setMnemonic(null);
+		///////////////////////////////////////////////////////////////
+		
+		///////////////////////////////////////////////////////////////
+		// Halt
+		command = new Command();
+		commandString = "HALT";		
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("Halt - Halt, poweroff Amnesia system.");
+		command.setCommandDescription(descriptions);		
+		// setting command code
+		command.setCode(code++);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n",				
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);		
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// setting no mnemonics to this command
+		command.setMnemonic(null);
+		///////////////////////////////////////////////////////////////	
+		
+		///////////////////////////////////////////////////////////////
+		// Exit
+		command = new Command();
+		commandString = "EXIT";		
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("Exit - Finishes binary program execution.");
+		command.setCommandDescription(descriptions);		
+		// setting command code
+		command.setCode(code++);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n",
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);		
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// setting no mnemonics to this command
+		command.setMnemonic(null);
+		///////////////////////////////////////////////////////////////
+		
+		///////////////////////////////////////////////////////////////
+		// Cache
+		command = new Command();
+		commandString = "CACHE";		
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("Cache - Displays cache(s) current state.");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// cache level
+		command.addParameter("-L %d", false);
+		// cache type
+		command.addParameter("-T %s", false);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n%s\n%s\n",
+				"-L %d\t - display only cache level represented by an integer number %d",
+				"\t\t-T %s\t - display only cache type represented by a string %s (unified or splitted)",
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);		
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// setting no mnemonics to this command
+		command.setMnemonic(null);
+		///////////////////////////////////////////////////////////////
+		
+		///////////////////////////////////////////////////////////////
+		// Virtual Memory
+		command = new Command();
+		commandString = "VIRTUALMEMORY";
+		mnemonicString = "VM";
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("VirtualMemory - Displays virtual memory current state (TLB, page table and disk).");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// show TLB
+		command.addParameter("-TLB", false);
+		// show Page Table
+		command.addParameter("-PT", false);
+		// show Disk
+		command.addParameter("-D", false);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n%s\n%s\n%s\n",
+				"-TLB\t - display only TLB current state",
+				"\t\t-PT\t - display only page table current state",
+				"\t\t-D\t - display only disk current state",
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);	
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// adding mnemonic
+		command.setMnemonic(mnemonicString);
+		amnesiaCommands.put(mnemonicString, command);
+		///////////////////////////////////////////////////////////////
+		
+		///////////////////////////////////////////////////////////////
+		// CPU
+		command = new Command();
+		commandString = "CPU";		
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("CPU - Displays register bank current state.");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// show cycle
+		command.addParameter("-C", false);
+		// show Register Bank
+		command.addParameter("-RB", false);
+		// show Internal Registers
+		command.addParameter("-INT", false);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n%s\n%s\n%s\n",
+				"-RB\t - display only register bank current state",
+				"\t\t-INT\t - display only CPU internal registers",
+				"\t\t-C\t - display current state",
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// setting no mnemonics to this command
+		command.setMnemonic(null);
+		///////////////////////////////////////////////////////////////
+		
+		///////////////////////////////////////////////////////////////
+		// RUN
+		command = new Command();
+		commandString = "RUN";		
+		command.setCommand(commandString.toUpperCase());
+		//setting command description
+		descriptions = new String("Run - Runs program previously loaded into main memory.");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n",
+				"-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// setting no mnemonics to this command
+		command.setMnemonic(null);
+		///////////////////////////////////////////////////////////////
+		
+		///////////////////////////////////////////////////////////////
+		// Step ?????????????????????????????
+		command = new Command();
+		commandString = "STEP";
+		mnemonicString = "S";
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("Step - Runs program loaded in main memory in step-by-step mode.");
+		command.setCommandDescription(descriptions);		
+		// setting command code
+		command.setCode(code++);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// step over
+		command.addParameter("-over", false);
+		// step off
+		command.addParameter("-off", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n%s\n%s\n",				
+				"-over\t - step over next level",
+				"\t\t-off\t - step off current level",
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// adding mnemonic
+		command.setMnemonic(mnemonicString);
+		amnesiaCommands.put(mnemonicString, command);		
+		///////////////////////////////////////////////////////////////
+				
+		///////////////////////////////////////////////////////////////
+		// Help 
+		command = new Command();
+		commandString = "HELP";		
+		command.setCommand(commandString.toUpperCase());
+		//setting command description
+		descriptions = new String("Display avaliable Amnesia command.");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n",				
+				"-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);		
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// setting no mnemonics to this command
+		command.setMnemonic(null);
+		///////////////////////////////////////////////////////////////
+		
+		///////////////////////////////////////////////////////////////
+		// MAIN MEMORY
+		command = new Command();
+		commandString = "MAINMEMORY";
+		mnemonicString = "MM";
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("MainMemory - Displays main memory current state.");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n",				
+				"-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");
+		command.setParametersDescription(descriptions);
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// adding mnemonic
+		command.setMnemonic(mnemonicString);
+		amnesiaCommands.put(mnemonicString, command);		
+		///////////////////////////////////////////////////////////////
+
+		///////////////////////////////////////////////////////////////
+		// Statistics
+		command = new Command();
+		commandString = "STATISTICS";
+		mnemonicString = "ST";
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("STATISTICS - Displays all system statitics.");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// usage
+		command.addParameter("%s", true);
+		// usage
+		command.addParameter("-L", false);
+		// usage
+		command.addParameter("-T", false);
+		// usage
+		command.addParameter("-h", false);
+		// usage
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n%s\n%s\n%s\n",				
+				"%s\t - amnesia memory object",
+				"\t\t-L\t - cache level (if %s = cache object)",
+				"\t\t-T\t - cache type (if %s = cache object)",
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");				
+		command.setParametersDescription(descriptions);
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// adding mnemonic
+		command.setMnemonic(mnemonicString);
+		amnesiaCommands.put(mnemonicString, command);		
+		///////////////////////////////////////////////////////////////		
+
+///////////////////////////////////////////////////////////////
+		// Statistics
+		command = new Command();
+		commandString = "PAUSE";
+		mnemonicString = "P";
+		command.setCommand(commandString);
+		//setting command description
+		descriptions = new String("PAUSE - Set system to pause mode.");
+		command.setCommandDescription(descriptions);
+		// setting command code
+		command.setCode(code++);
+		// usage
+		command.addParameter("%s", true);
+		// usage
+		command.addParameter("-h", false);
+		command.addParameter("-help", false);
+		// setting parameters description		
+		descriptions = String.format("%s\n%s\n%s\n",				
+				"%s\t - amnesia memory object",				
+				"\t\t-h\t - shows command usage (smaller descrition)",
+				"\t\t-help\t - same as -h");				
+		command.setParametersDescription(descriptions);
+		// adding command to amnesiaCommands
+		amnesiaCommands.put(commandString, command);
+		// adding mnemonic
+		command.setMnemonic(mnemonicString);
+		amnesiaCommands.put(mnemonicString, command);		
+		///////////////////////////////////////////////////////////////		
+
+	}
+	
+	/**
+	 * 
+	 */
+	public void printCommand(){
+		
+		// get elements of hash table
+		Enumeration<Command> commandList = amnesiaCommands.elements();
+		
+		HashSet<String> set = new HashSet<String>();
+		
+		// get all commands in the list
+		while(commandList.hasMoreElements()){
+			Command command = commandList.nextElement();
+			set.add(command.getCommandDescription());
+			
+		}
+	
+		Iterator<String> iterator = set.iterator();
+		while(iterator.hasNext()){
+			System.out.print(iterator.next().toLowerCase() + "\n");
+			
+		}
+		System.out.println();
+	}
+		
+	/**
+	
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		
+		ValidateCommand validator = new ValidateCommand();
+		
+		Scanner in = new Scanner(System.in);
+		
+		System.out.print("Amnesia: ");
+		String command = in.nextLine();
+		
+		while( command.compareTo("exit") != 0){
+				
+			if( validator.validate(command) != null){
+				System.out.println("Command Accepted");
+								
+			}		
+			
+			System.out.print("Amnesia: ");	
+			command = in.nextLine();
+		}
+		
+		
+				
+	
+	}
+*/
+}

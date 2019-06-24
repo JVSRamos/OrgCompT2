@@ -1,0 +1,93 @@
+package cpu;
+import amnesiaCommons.*;
+
+/**
+ * 
+ * @author jordan
+ * alterado em 11/10 por Jordan
+ * atualizado em 17/10 por Jordan
+ * Inseridos nomes dos registradores (14/07/2010 - Gabriel)
+ */
+
+public class RegistersBank implements Observer {
+	
+	private Register[] contents;
+	private byte regWrite;
+	private byte readRegister1;
+	private byte readRegister2;
+	private int writeRegister;
+	private Word writeData;
+	private Multiplexer regDest;
+	private Multiplexer memToReg;
+	private CPUInternalRegisters CPURegisters;
+	private Word aux;
+	private int i;
+	public static final String[] regNames = { // Registers names
+		"zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", 
+		"t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", 
+		"s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", 
+		"t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"};
+	
+	public RegistersBank(int nRegisters, Multiplexer regDest, Multiplexer memToReg, CPUInternalRegisters CPURegisters){
+		
+		contents = new Register[nRegisters];
+		for (i = 0; i < nRegisters; ++i)
+			contents[i] = new Register();
+		
+		writeData = new Word(4);
+		this.regDest = regDest;
+		this.memToReg = memToReg;
+		this.CPURegisters = CPURegisters;
+		aux = new Word(4);
+	}
+	
+	public void update(int controlSigns){
+		
+		// getting control signs to check if it�s a write operation or not
+		regWrite = (byte)((controlSigns & 0x00000400) >>> 10);
+		// getting IR content
+		aux = CPURegisters.getIR();
+		//getting read registers addresses
+		readRegister1 = (byte)( ( aux.getLongValue() & 0x03E00000 ) >>> 21 );//rs
+		readRegister2 = (byte)( ( aux.getLongValue() & 0x001F0000 ) >>> 16 );//rt
+		
+		//getting adress from regDest for write
+		aux = regDest.getData();
+		writeRegister = (int)(aux.getLongValue());
+		
+		//getting write data from memToReg
+		
+		writeData = memToReg.getData();
+		
+		if (regWrite != 0){ // Write operation
+			
+			//write data into the Write Register address
+			contents[writeRegister].store(writeData);
+		}
+		else // read operation
+			//RegA and RegB receives the content from adresses read1 and read2
+		    CPURegisters.setRegA(contents[readRegister1].load());
+		    CPURegisters.setRegB(contents[readRegister2].load());
+		
+	}
+	
+	public Word getContent(int pos){
+		return contents[pos].load();
+	}
+	
+	public int getReg1(){
+		return readRegister1;
+	}
+	
+	public int getReg2(){
+		return readRegister2;
+	}
+	public int getWriteReg(){
+		return writeRegister;
+	}
+	public void setContent(int pos, int data){
+		contents[pos].store(data);
+	}
+	
+}
+

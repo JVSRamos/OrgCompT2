@@ -1,0 +1,52 @@
+8
+
+dir
+149
+https://svn.lasdpc.icmc.usp.br/svn/ProjetoAmnesia/trunk/Codigo/src/traceFile
+https://svn.lasdpc.icmc.usp.br/svn/ProjetoAmnesia
+
+
+
+2010-10-29T16:07:50.642822Z
+149
+moraes
+
+
+svn:special svn:externals svn:needs-lock
+
+TraceControl.java
+file
+
+
+
+
+2010-10-29T15:15:42.839282Z
+7e2775911d7271c816590c7cc62ac0c2
+2010-10-29T16:07:50.642822Z
+149
+moraes
+
+TraceManager.java
+file
+
+
+
+
+2010-10-22T18:09:14.000000Z
+73565a3a676f80e3cbbd90dc3dd4db41
+2010-10-29T16:07:50.642822Z
+149
+moraes
+
+Trace.java
+file
+
+
+
+
+2010-10-29T14:09:44.317282Z
+ea6392e0207a011eea8f46e2a9092c97
+2010-10-29T16:07:50.642822Z
+149
+moraes
+

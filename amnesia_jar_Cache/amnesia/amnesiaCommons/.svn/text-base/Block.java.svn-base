@@ -1,0 +1,179 @@
+/**
+ * Represents the smallest tranfer unit between caches and main memory.
+ */
+
+package amnesiaCommons;
+
+
+/**
+ * @author Bruno Henrique Oliveira
+ * Alterada em 23/08/07 por Bruno
+ * Alterada em 12/09/07 por Bruno
+ * Alterada em 03/10/07 por Bruno
+ */
+public class Block{
+
+	
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	private int blockSize;
+	private Word block[];
+	private boolean emptyBlock;	// verify empty block
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */
+	// CONSTRUCTOR
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for Block
+	 * @param blockSize, wordSize
+	 */
+	/* ************************************************************************ */
+	public Block( int blockSize, int wordSize ){
+		
+		this.blockSize = blockSize;
+		block = new Word[ blockSize ];		// declare size of array block
+		emptyBlock = true;
+		
+		// intanciate all word in the block
+		for(int i = 0; i < this.blockSize; ++i){
+			block[i] = new Word( wordSize );
+		}
+		
+	}// contructor
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */
+	// METHODS
+	/* ************************************************************************ */	
+	/* ************************************************************************ */	
+	/**
+	 * Set the data in determined block position 
+	 * @param word, position
+	 */
+	/* ************************************************************************ */
+	public void setWord( Word word, int position ){
+
+//		// try to set word in a valid position
+//		try{// set new word data in determined block position
+			
+			block[position].setWord( word.getValue() );
+			emptyBlock = false;
+			
+//		}catch(Exception invalidPositionException){
+//			System.err.println("Invalid positon in block exception while trying" +
+//			"to set word");
+//			System.err.println("System exiting now");
+//			System.exit(1);
+//		}
+	}
+	/* ************************************************************************ */	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Returns the data storaged in determined block position
+	 * @param postion 
+	 * @return word
+	 */
+	/* ************************************************************************ */
+	public Word getWord( int position ){
+		// try to return valid data
+//		try{
+			return block[position];
+//		}catch(Exception invalidPositionException){ // if position it's not valid
+//			System.err.println("Invalid positon in block exception while trying" +
+//					"to get word");
+//			System.err.println("System exiting now");
+//			System.exit(1);
+//		}
+//		return block[position];
+	}
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Checks if block is empty
+	 * @return true if block is empty
+	 */
+	/* ************************************************************************ */
+	public boolean checkEmpty( ){
+		return emptyBlock;
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Checks if any word in this block was modified
+	 * @return true if block was modified
+	 */
+	/* ************************************************************************ */
+	public boolean checkModified( ){
+		
+		boolean modified = false;
+				
+		for(int i = 0; i < blockSize; ++i){
+			if ( block[i].isModified() == true )
+				modified = true;
+		}
+		
+		return modified;
+	}
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Return the size of the block
+	 * @return this.blockSize
+	 */
+	/* ************************************************************************ */
+	public int getBlockSize(){
+	    return blockSize;
+	}
+
+	
+	/* ************************************************************************ */	
+	/**
+	 * Return the contens of this structure
+	 * @return this.blockLine
+	 */
+	/* ************************************************************************ */
+	public Block getBlock( ){
+		
+		return this;
+	}
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Copies a block into this structure
+	 * @param BlockLine
+	 */
+	/* ************************************************************************ */
+	public void setBlock( Block blockLine ){
+
+                    
+		// copy all words to this block
+		for(int i = 0; i < blockSize; ++i){
+			block[i].setWord(blockLine.getWord(i).getLongValue());
+		}
+
+		// set not empty to this block
+		emptyBlock = blockLine.checkEmpty();
+	}
+	/* ************************************************************************ */
+	
+	
+	public void printBlock(){		
+		for(int i = 0; i < this.blockSize; ++i){
+			System.out.print(Long.toHexString(block[i].getLongValue()) + " ");
+		}
+		System.out.println();
+	}
+	
+}// class BlockLine

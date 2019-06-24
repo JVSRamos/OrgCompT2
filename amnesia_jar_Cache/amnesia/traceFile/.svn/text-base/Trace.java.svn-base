@@ -1,0 +1,20 @@
+package traceFile;
+
+import traceFile.TraceControl;
+
+public class Trace 
+{	
+	private TraceControl traceControl;
+	
+	public Trace(){
+		traceControl = new TraceControl();		
+	}
+
+	public void trace(){		
+		traceControl.memoryAccess();
+	}
+
+	public TraceControl getTraceControl(){
+		return traceControl;
+	}	
+}

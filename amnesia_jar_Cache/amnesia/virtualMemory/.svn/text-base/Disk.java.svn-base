@@ -1,0 +1,402 @@
+/**
+ * 
+ */
+package virtualMemory;
+
+import amnesiaCommons.AccessInfo;
+import amnesiaCommons.Block;
+import amnesiaCommons.Printer;
+import amnesiaCommons.Word;
+import amnesiaCommons.Memory;
+import java.io.File;
+import java.io.RandomAccessFile;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Stack;
+
+import control.AmnesiaControl;
+
+
+
+/**
+ * @author Bruno Henrique Oliveira
+ */
+public class Disk extends Memory{
+	
+	private int multiplicationFactor;		// cicles diference beetween any memory access and disk 
+	private int pageSize;					// size of each page in words.
+	private AccessInfo info;				// stores access informations
+	private File file;	     				// file in witch page will be stored
+	private Stack<Long> emptyAddresses;	// store all empty page address in disk
+	private AmnesiaControl control;
+	private Printer printer;
+	
+	/**
+	 * Creates and initialize a disk instance.
+	 */
+	public Disk(int wordSize, int blockSize, int memorySize, int pageSize, int ciclesPerAccess, int multFactor) {
+		// setting basic configs
+		super(wordSize, blockSize, ciclesPerAccess, memorySize );
+		
+		// setting multiplication factor
+		multiplicationFactor = multFactor;
+		
+		// setting page size
+		this.pageSize = pageSize;
+		
+		// intancianting access info object
+		info = new AccessInfo();
+		
+		// instanciating new File
+		file = new File("disk.dat");
+		
+		// setting delete to file when Amnesia stop execution
+		file.deleteOnExit();
+		
+		// instanciate empty file addresses
+		emptyAddresses = new Stack<Long>();
+		
+		control = null;
+		
+		printer = new Printer();
+		
+		// insert empty positions in stack
+		long diskNumberOfPages = (long) (memorySize/pageSize);
+		for(long i = diskNumberOfPages - 1 ; i >= 0; --i){
+			emptyAddresses.push(i);
+		}
+	}
+
+
+	
+	/**
+	 * Return page from disk
+	 * @param Word - address
+	 * @return Page
+	 */
+	public Page load(long pageNumber) {
+		// TODO Auto-generated method stub
+		
+		// informing disk access
+		info.incTotalAccess();		
+		
+		//System.out.println("LOAD!!!");	
+		// page that will contain disk data
+		Page page = new Page(pageSize, getWordSize());
+	
+		if((pageNumber > getMemorySize()/pageSize) || pageNumber < 0){
+			System.err.println("Page isn't on Disk");
+			System.exit(0);
+		}
+			 
+		
+		// disk position
+		long diskAddress =  pageNumber * pageSize;
+		
+		if(control != null){
+			
+			String location = String.format("Loading page from Disk"); 
+			String addressString = String.format("\n%s", 
+					 printer.formatHexString(Long.toHexString(diskAddress)));
+			control.pause("disk|"+location+"|address", addressString );
+		}
+		
+		try{
+			// creating file input stream
+			RandomAccessFile inputStream = new RandomAccessFile(file, "r");
+			
+			// auxiliar word object for data acquisition
+			Word data = new Word(getWordSize());
+		
+			// auxiliar byte array for data acquisition
+			byte dataIn[] = new byte[getWordSize()];
+			
+			// set inicial disk address 
+			inputStream.seek(diskAddress * getWordSize() );
+			
+			for(int i = 0; i < pageSize; ++i){
+				
+				inputStream.read(dataIn, 0, getWordSize());
+				
+				data.setWord(dataIn);
+				
+				page.store(i, data);
+			}
+			
+			// inserting free space at empty space stack
+			emptyAddresses.push(pageNumber);
+			
+			// closing input stream
+			inputStream.close();
+		}catch(FileNotFoundException exception){
+			// VER O QUE FAZER AQUI
+			System.err.println("Nao achou o arquivo de disco para leitura");
+			System.exit(0);
+		}catch(IOException exception){
+			System.err.println("Erro ao ler do arquivo");
+			System.exit(0);
+		}
+		//imprimePagina(page);
+		return page;
+	}
+	
+	/**
+	 * Store a page in disk
+	 * @param Page - page
+	 * @param Word - pageNumber 
+	 */
+	public long store(Page page) {
+		// TODO Auto-generated method stub
+		// page disk position
+		
+		//System.out.println("STORE!!!");
+		// informing disk access
+		info.incTotalAccess();		
+	
+		// disk page position
+		long pagePosition = 0;
+		
+		try{
+			
+			if(emptyAddresses.empty()){
+				// ERRO AQUI
+				System.err.println("Error: no more space in disk");
+				System.exit(0);
+			}
+			
+			// get empty disk page position
+			pagePosition = emptyAddresses.pop();
+			
+			// calculates disk real address
+			long diskAddress = pagePosition * pageSize;
+			
+			if(control != null){
+				
+				String location = String.format("Storing page in Disk"); 
+				String addressString = String.format("\n%s", 
+						 printer.formatHexString(Long.toHexString(diskAddress)));
+				control.pause("disk|"+location+"|address", addressString );
+			}
+			
+			// sets ouputstream
+			RandomAccessFile outputStream = new RandomAccessFile(file, "rw");
+			
+			// auxiliar word object for data storage			
+			Word data = new Word(getWordSize());
+			
+			// sets inicial disk position
+			outputStream.seek(diskAddress * getWordSize() );
+			
+			// store page in file in the determined position
+			for(int i = 0; i < page.getPageSize(); ++i){
+				
+				// get data stored in page
+				data = page.load(i);
+				
+				// get data length
+				int dataLength = data.getWordSize();
+				
+				// writing data in disk
+				outputStream.write(data.getValue(), 0, dataLength);
+				
+			}
+			
+			// closing output stream
+			outputStream.close();
+			
+		}catch(FileNotFoundException exception){
+			// VER O QUE FAZER AQUI
+			System.err.println("Nao achou o arquivo de disco para escrita");
+			System.exit(0);
+		}catch(IOException exception){
+			System.err.println("Erro ao escrever no arquivo");
+			System.exit(0);
+		}
+		//imprimePagina(page);
+		return pagePosition;
+	}
+	
+	@Override
+	public void writeAccessInfo() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	/**
+	 * Not used because disk transfer only pages
+	 * @param Word - address
+	 * @return Block
+	 */
+	public Block load(Word address, int ispt) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+	
+	@Override
+	/**
+	 * Not used because disk transfer only pages
+	 * @param Word - address
+	 * @param Block - data
+	 */
+	public void store(Word address, Block data, int ispt) {
+		// TODO Auto-generated method stub		
+	}	
+	
+	/* ************************************************************************ */	
+	/**
+	 * Get number of CPU cicles spent in disk
+	 * @return int - number of cpu cicles 
+	 */
+	/* ************************************************************************ */
+	public int getTotalCicles(){
+		return super.getCiclesPerAccess() * info.getTotalAccess() * multiplicationFactor;
+	}
+	/* ************************************************************************ */
+	
+
+	/* ************************************************************************ */	
+	/**
+	 * Get number of disk access
+	 * @return int - number of disk access 
+	 */
+	/* ************************************************************************ */
+	public int getNumberOfAccess(){
+
+		return info.getTotalAccess();
+	}
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Get the disk page size
+	 * @return int - page size 
+	 */
+	/* ************************************************************************ */
+	public int getPageSize(){
+
+		return pageSize;
+	}
+	/* ************************************************************************ */
+	
+	
+	
+	public String[] getContents(){
+		
+		String[] contents = new String[getMemorySize()/pageSize];
+		int pageNumber = 0;
+		
+		try{
+			// creating file input stream
+			RandomAccessFile inputStream = new RandomAccessFile(file, "r");
+			
+			// auxiliar word object for data acquisition
+			Word data = new Word(getWordSize());
+		
+			// auxiliar byte array for data acquisition
+			byte dataIn[] = new byte[getWordSize()];
+			
+			// set inicial disk address 
+			//inputStream.seek(diskAddress * getWordSize() );
+			
+			for(int i = 0; i < getMemorySize(); ++i){
+				
+				inputStream.read(dataIn, 0, getWordSize());
+				if(dataIn != null){
+					data.setWord(dataIn);
+					if(contents[pageNumber] == null){
+						contents[pageNumber] = Long.toString( data.getLongValue());
+					}else{
+						contents[pageNumber] = contents[pageNumber].concat(" ");
+						contents[pageNumber] = contents[pageNumber].concat(Long.toString( data.getLongValue()) );						
+					}
+					
+					
+					if ((i + 1) % pageSize == 0){
+						contents[pageNumber] = contents[pageNumber].concat(";");
+						pageNumber++;
+					}
+				}
+				
+					
+			}
+			
+
+			
+			// closing input stream
+			inputStream.close();
+		}catch(FileNotFoundException exception){
+			// VER O QUE FAZER AQUI
+			System.out.println("Disk is empty.");
+			return null;
+			//System.exit(0);
+		}catch(IOException exception){
+			System.err.println("Erro ao ler do arquivo");
+			System.exit(0);
+		}
+		
+		return contents;
+		
+	}
+	
+	
+	
+	
+	private void imprimePagina(Page pagina){
+		for(int i = 0; i < pagina.getPageSize(); ++i){
+			System.out.print(pagina.load(i).getLongValue() + "\t");
+		}
+		System.out.println();
+	}
+	
+	public void imprimeTodas(){
+		
+		
+		try{
+			// creating file input stream
+			RandomAccessFile inputStream = new RandomAccessFile(file, "r");
+			
+			// auxiliar word object for data acquisition
+			Word data = new Word(getWordSize());
+		
+			// auxiliar byte array for data acquisition
+			byte dataIn[] = new byte[getWordSize()];
+			
+			// set inicial disk address 
+			//inputStream.seek(diskAddress * getWordSize() );
+			
+			for(int i = 0; i < getMemorySize(); ++i){
+				
+				inputStream.read(dataIn, 0, getWordSize());
+				
+				data.setWord(dataIn);
+				if ((i + 1) % pageSize == 0){
+					System.out.println(data.getLongValue() + " ");
+				}else
+					System.out.print(data.getLongValue() + " ");
+			}
+			
+
+			
+			// closing input stream
+			inputStream.close();
+		}catch(FileNotFoundException exception){
+			// VER O QUE FAZER AQUI
+			System.err.println("Nao achou o arquivo de disco para leitura");
+			System.exit(0);
+		}catch(IOException exception){
+			System.err.println("Erro ao ler do arquivo");
+			System.exit(0);
+		}
+		
+	}
+	
+	/**
+	 * Set control object for communication engine-control.
+	 * @param AmnesiaControl control - control object
+	 */
+	public void setControl(AmnesiaControl control){ 
+		this.control = control;
+	}
+	
+}

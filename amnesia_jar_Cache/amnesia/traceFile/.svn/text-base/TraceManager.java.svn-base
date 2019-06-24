@@ -1,0 +1,335 @@
+package traceFile;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Scanner;
+import java.util.Vector;
+
+import virtualMemory.Page;
+import virtualMemory.VirtualMemory;
+import amnesiaCommons.Block;
+import amnesiaCommons.MainMemory;
+import amnesiaCommons.Printer;
+import amnesiaCommons.Word;
+
+public class TraceManager 
+{
+
+	private Scanner input;
+	File file;
+    String fileName;
+    Printer printer;   
+    VirtualMemory virtualMemory;
+    MainMemory mainMemory;
+    Page diskPage;
+    Vector<String> instructions;
+    Vector<String> hexaddress;
+	
+	public TraceManager(String fileName, Printer printer, Vector<String> instructions, Vector<String> hexaddress, MainMemory mainMemory, VirtualMemory virtualMemory)
+	{
+        this.fileName = fileName;       
+        this.printer = printer;        
+        this.instructions = instructions;
+        this.hexaddress = hexaddress;
+        
+        
+		this.mainMemory = mainMemory;              
+        this.virtualMemory = virtualMemory;        
+        if (virtualMemory!= null)
+        	diskPage = new Page(virtualMemory.getPageSize(), virtualMemory.getWordSize());
+        
+	}
+
+
+	
+	public boolean openFile()
+	{
+		try
+		{
+			fileName = fileName.trim();
+                
+			file = new File(fileName);
+		
+			file.setReadable(true);
+			
+			input = new Scanner( file );
+		}
+		catch (FileNotFoundException fileNotFoundException )
+		{
+			printer.setError("File not found.");		
+			return false;
+		}
+		
+		return true;
+	}
+	
+	
+	public boolean readFile()
+	{
+		String inputString = new String();
+		try
+		{			
+			while (input.hasNext())
+			{
+				inputString = input.next();
+				instructions.add(inputString);
+				//System.out.println(inputString);
+				inputString = input.next();
+				hexaddress.add(inputString);				
+				//System.out.println(inputString);
+				if(input.hasNext())
+					input.nextLine();
+				
+			}
+		}
+		catch ( IllegalStateException stateException ){
+			printer.setError(" Error reading from file, check file name.");
+			return false;
+		}
+		catch ( NumberFormatException numberFormatException ){
+			printer.setError(" Error in number format ");
+			return false;
+		}
+		
+		printer.setDataOut("Trace file sucessfully loaded");		
+				
+		
+		Word address = new Word(mainMemory.getWordSize());
+		Word data = new Word(mainMemory.getWordSize());
+		Block line = new Block(mainMemory.getBlockSize(), mainMemory.getWordSize());
+		
+		int blockData[];
+		blockData = new int[mainMemory.getBlockSize()];
+		
+		int blockIndex;
+		int j;
+		long addr;
+		long dataCount = 0;				// stores how many data was read from file.
+		long overallCount = 0;			// used to remove comments and don�t let a page be placed twice in pageTable
+		long virtualPageNumber = 0;	// stores the next virtual page number to be used.	
+		long lastBlockAddress;
+		//String inputString = new String();
+		
+		if (virtualMemory != null){ 
+			lastBlockAddress = virtualMemory.getRegisterOffset();			
+		}	
+		else 
+			lastBlockAddress = mainMemory.getMemorySize();
+		try{
+			blockIndex = 0;
+			addr = 0;
+			address.setWord( addr );			
+			
+			
+			while ( (input.hasNext() && (address.getLongValue() < lastBlockAddress) ) )			
+			{
+				if(virtualMemory != null)
+				{
+					// verify if we are starting a new page.
+					//  we check if dataCount == overallCount because when a comment is skipped, a page can be inserted twice in the				
+					// page table.
+					if ( (dataCount % virtualMemory.getPageSize()==0) && (dataCount == overallCount ) ) 
+					{
+						// initializes the new page data into page table.
+						virtualMemory.getPageTable().setEntry(virtualMemory.getPageNumber(address.getLongValue()), virtualPageNumber, true);
+						// increase the next virtualPageNumber.
+						virtualPageNumber++;
+					}									
+				}
+
+				
+				instructions.add(inputString);
+				inputString = input.next();
+				
+				if(inputString.startsWith("//") == true)
+				{
+					instructions.set(instructions.size() -1, instructions.lastElement().concat(inputString)); 				
+					System.out.println(instructions.lastElement());
+					// if one comment "//" is found, the remaining words in the line are skipped
+					if (input.hasNext())
+					{
+						//concatenation of the hexadecimal code with comment line
+						
+						input.nextLine();
+						overallCount++;
+						
+					}
+				}
+				else
+				{
+					
+					//transforms the file's strings into hexa decimals numbers
+					blockData[blockIndex] = (int)Long.parseLong(inputString, 16);
+					// setting data and line for each value of i to fill mainMemory
+				    data.setWord( blockData[blockIndex] );				    
+				    line.setWord(data, blockIndex);				    
+				    // cleaning vector position
+				    blockData[blockIndex] = 0;
+				    // incrementing i until it reaches mainMemory blockSize
+				    blockIndex += 1;
+				    
+				    if ( blockIndex == mainMemory.getBlockSize())
+				    { 
+				    	// reseting blockIndex
+				    	blockIndex = 0;
+				    	// filling mainMemory's block, according to address 
+				    	mainMemory.start(address, line);
+				    	// setting address to the next initial block position
+				    	addr += mainMemory.getBlockSize();
+				    	address.setWord( addr );					
+				    }
+				    
+				    // increment count variable
+				    dataCount++;
+				    overallCount = dataCount;
+				}
+			}
+		
+			
+			
+			// if we still have data in the file and we don't have space in mainMemory, we must insert it in the disk 
+			if (input.hasNext() && virtualMemory != null){
+				// This case will only happen if we have virtual memory. 
+				// If we dont't have virtual memory, the program is bigger than mainMemory
+				// if (virtualMemory == null) EXCESSAO!!!
+				int i = 0;
+				while (input.hasNext()){
+					
+					inputString = input.next();
+					
+					if(inputString.startsWith("//") == true){
+						// if one comment "//" is found, the remaining words in the line are skipped
+						if (input.hasNext()){
+							input.nextLine();
+						}
+						
+					}else{
+
+						// filling one page to be inserted into disk
+						data.setWord(Long.parseLong(inputString, 16));					
+						diskPage.store(i, data);
+						i++;
+						if (i == virtualMemory.getPageSize()){
+							// storing page into disk
+							long diskAddress = virtualMemory.getDisk().store(diskPage);
+							// making pageTable entry to this page	
+							virtualMemory.getPageTable().setEntry(diskAddress, virtualPageNumber, false);	
+							virtualPageNumber++;
+							i=0;
+						}
+					}	
+				}
+			
+				// if we couldn't complete the whole page
+				if (i < virtualMemory.getPageSize()){
+					// filling the rest of the page with 0's
+					for(; i < virtualMemory.getPageSize(); i++){
+						data.setWord(0);					
+						diskPage.store(i, data);
+					}
+					// storing page into disk 
+					long diskAddress = virtualMemory.getDisk().store(diskPage);
+					// making pageTable entry to this page	
+					virtualMemory.getPageTable().setEntry(diskAddress, virtualPageNumber, false);	
+					virtualPageNumber++;
+					
+				}
+				 
+				
+			}else{ // we must fill the rest of the mainMemory with 0's and complete the rest of the page table.
+				while (addr < lastBlockAddress){
+					if(virtualMemory != null){
+						// verify if we are starting a new page.
+						if ( dataCount % virtualMemory.getPageSize()==0 ) {
+							// initializes the new page data into page table.
+							virtualMemory.getPageTable().setEntry(virtualMemory.getPageNumber(address.getLongValue()), virtualPageNumber, true);
+							// increase the next virtualPageNumber.
+							virtualPageNumber++;
+
+						}									
+					}
+
+					// filling the rest of the last instruction block with 0's if the number of instructions
+					// in the file isn't multiple of mainMemory's blockSize
+				    if ( blockIndex > 0 ){ 
+				    	for (j = blockIndex; j < mainMemory.getBlockSize(); j++){ 
+						     data.setWord( blockData[j] );
+						     line.setWord(data, j);
+						     blockData[j] = 0;
+						     dataCount++;
+					    }
+					    blockIndex = 0;
+					    mainMemory.start(address, line);
+					    addr += mainMemory.getBlockSize();
+				    	address.setWord( addr );
+				    }else{
+				    	// filling the rest of the pages and the main memory with 0's
+				    	if (virtualMemory != null){
+					    	for (j = blockIndex; j < mainMemory.getBlockSize(); j++){ 
+							     data.setWord( 0 );
+							     line.setWord(data, j);
+							     dataCount++;
+							}
+							blockIndex = 0;
+							mainMemory.start(address, line);
+							addr += mainMemory.getBlockSize();
+							address.setWord( addr );
+				    		
+						}else{	// if there's no virtual memory, we don't need to fill rest of the main memory with 0's.	
+							addr = lastBlockAddress;				    
+					    }
+				    }
+				}	
+			}
+			
+			if(virtualMemory != null){
+
+				// finalize page table and disk start up.	
+				while (virtualPageNumber < virtualMemory.getNumberOfPages()){
+					// setting the rest of the disk pages in pageTable
+					for(int i = 0; i < virtualMemory.getPageSize(); i++){
+						data.setWord(0);					
+						diskPage.store(i, data);
+					}
+					// storing page into disk 
+					long diskAddress = virtualMemory.getDisk().store(diskPage);
+					// making pageTable entry to this page	
+					virtualMemory.getPageTable().setEntry(diskAddress, virtualPageNumber, false);	
+					virtualPageNumber++;
+				}
+			}
+		
+		
+		
+		}/*catch( NoSuchElementException noSuchElementException ){
+			printer.setDataOut(" File improperly formed. ");
+			input.close();
+			return false;
+		}*/
+		catch ( IllegalStateException stateException ){
+			printer.setError(" Error reading from file, check file name.");
+			return false;
+		}
+		catch ( NumberFormatException numberFormatException ){
+			printer.setError(" Error in number format ");
+			return false;
+		}		
+		
+		mainMemory.resetTotalAccessRead(); 
+		mainMemory.resetTotalAccessWrite();
+		
+		virtualMemory.getDisk().resetTotalAccessRead(); 
+		virtualMemory.getDisk().resetTotalAccessWrite();
+		
+		printer.setDataOut("Trace file sucessfully loaded into main memory");
+		return true;
+		
+			
+	}		
+	
+	public void closeFile()
+	{
+		if (input != null) input.close();
+	}
+
+}

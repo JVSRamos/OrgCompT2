@@ -1,0 +1,513 @@
+package cpu;
+import amnesiaCommons.*;
+
+
+
+
+
+/**
+ * Implements all the registers used in the CPU module 
+ */
+
+
+
+/**
+ * @author Jordan Herbert Santos
+ * Inseridos nomes dos registradores internos (14/07/2010 - Gabriel)
+ */
+
+public class CPUInternalRegisters implements Observer{
+	
+	// PRIVATE ATRIBUTES AND OBJECTS
+		
+	// All the registers
+	private Register IR;
+	private Register MDR;
+	private Register regA;
+	private Register regB;
+	private Register PC;	
+	private Register ALUOut;
+	private Register Hi;
+	private Register Lo;
+	
+	// "new" words used to change registers� content only in the end of each clock 
+	private Word newIR;
+	private Word newMDR;
+	private Word newRegA;
+	private Word newRegB;
+	private Word newPC;
+	private Word newALUOut;
+	private Word newHi;
+	private Word newLo;
+	
+	// Multiplexers used to get and send data
+	private Multiplexer BNE;
+	private Multiplexer IorD;
+	private Multiplexer regDest;
+	private Multiplexer memToReg;
+	private Multiplexer immOrShamt;
+	private Multiplexer ALUSourceA;
+	private Multiplexer ALUSourceB;
+	private Multiplexer PCSource;
+	
+	
+	private ShiftLeft shiftLeft2;	// used to calculate jump address
+	
+	private int controlSignals;		// control sings from controlUnit
+	private byte PCWrite;			// enable/disable write in PC
+	private byte IRWrite;			// enable/disable write in IR
+	private byte HiWrite;			// enable/disable write in Hi
+	private byte LoWrite;			// enable/disable write in Lo
+	
+	public static final String[] internalRegNames = { // Internal Registers names
+		"PC", "IR", "MDR", "A", "B", "ALUOut", "Lo", "Hi"};
+	
+	
+	
+	
+	
+	//Masks
+	//private final int opMask = 0xFC000000;
+	//private final int rsMask = 0x03E00000;
+	//private final int functMask = 0x0000003F;
+	private final int rtMask = 0x001F0000;
+	private final int rdMask = 0x0000F800;
+	private final int shamtMask = 0x000007C0;
+	private final int immMask = 0x0000FFFF;
+	private final int instr25Mask = 0x03FFFFFF;
+	
+	
+	/**
+	 * Constructor.
+	 * Sets all the initial values for CPUInternalRegisters 
+	 *
+	 */
+
+	public CPUInternalRegisters(Multiplexer BNE, Multiplexer IorD, Multiplexer regDest, Multiplexer memToReg, 
+			Multiplexer immOrShamt, Multiplexer ALUSourceA, Multiplexer ALUSourceB, Multiplexer PCSource, 
+			ShiftLeft shiftLeft2){
+		
+		IR = new Register();
+		MDR = new Register();
+		regA = new Register();
+		regB = new Register();
+		PC = new Register();
+		ALUOut = new Register();
+		Hi = new Register();
+		Lo = new Register();
+		this.BNE = BNE;
+		this.IorD = IorD;
+		this.regDest = regDest;
+		this.memToReg = memToReg;
+		this.immOrShamt = immOrShamt;
+		this.ALUSourceA = ALUSourceA;
+		this.ALUSourceB = ALUSourceB;
+		this.PCSource = PCSource;
+		this.shiftLeft2 = shiftLeft2;
+		
+		newIR = new Word(4);
+		newMDR = new Word(4);
+		newRegA = new Word(4);
+		newRegB = new Word(4);
+		newPC = new Word(4);
+		newALUOut = new Word(4);
+		newHi = new Word(4);
+		newLo = new Word(4);		
+
+	}
+	
+	/**
+	 * 
+	 * Method update
+	 * @param 
+	 * method that receives controlSingals and sets IR, Hi and Lo write control
+	 * 
+	 */
+	
+	public void update(int controlSignals){
+		
+		this.controlSignals = controlSignals; 	
+		IRWrite = (byte)(( controlSignals & 0x00000020 ) >>> 5 );
+		HiWrite = (byte)(( controlSignals & 0x00000010 ) >>> 4 );
+		LoWrite = (byte)(( controlSignals & 0x00000040 ) >>> 6 );
+	}
+
+	/**
+	 * 
+	 * Method setIR
+	 * @param content
+	 * method that sets the Word newIR to set the IR in refresh method 
+	 * 
+	 */
+
+	public void setIR(Word content){
+		
+		
+		// checks if write is allowed
+		if (IRWrite != 0){
+			// checks if content is unsigned or not
+			if (content.isUnsigned()){
+				newIR.setWordUnsigned(content.getLongValue());
+	    	}else{
+	    		newIR.setWord(content.getLongValue());
+	    	}
+		}
+		
+	}
+	
+	
+	/**
+	 * 
+	 * Method setPC
+	 * @param 
+	 * method that sets the Word newPC to set the PC in refresh method 
+	 * 
+	 */
+	public void setPC(){
+
+		Word content = new Word(4);
+		Word aux = new Word(4);
+		
+		
+		// getting BNE data
+		aux = BNE.getData();
+		
+		// checking if PCWrite will be enable
+		//PCWrite != 0 or ( writePCCond and BNE are != 0 )
+		if ( ( (controlSignals & 0x00000100) != 0 ) || ( ((controlSignals & 0x00000200) != 0) && ( aux.getLongValue() != 0) ) )
+		    PCWrite = 1;
+		else 
+			PCWrite = 0;
+		
+		// if PCWrite is enable, write in newPC
+		if (PCWrite != 0){
+			// content receives PCSource�s data
+			content = PCSource.getData();
+			// checks if content is unsigned or not
+			if (content.isUnsigned()){
+				newPC.setWordUnsigned(content.getLongValue());
+	    	}else{
+	    		newPC.setWord(content.getLongValue());
+	    	}
+			
+
+		}
+	}
+	
+	
+	/**
+	 * 
+	 * Method setHi
+	 * @param content
+	 * method that sets the Word newHi to set the Hi in refresh method 
+	 * 
+	 */
+	
+	public void setHi(Word content){
+		
+		
+		// checks if write is allowed
+		if (HiWrite != 0){
+			// checks if content is unsigned or not			
+			if (content.isUnsigned()){
+				newHi.setWordUnsigned(content.getLongValue());
+	    	}else{
+	    		newHi.setWord(content.getLongValue());
+	    	}
+			
+		}
+
+	}
+	/**
+	 * 
+	 * Method setLo
+	 * @param content
+	 * method that sets the Word newLo to set the Lo in refresh method 
+	 * 
+	 */	
+	public void setLo(Word content){
+
+		// checks if write is allowed		
+		if (LoWrite != 0){
+			// checks if content is unsigned or not
+			if (content.isUnsigned()){
+				newLo.setWordUnsigned(content.getLongValue());
+	    	}else{
+	    		newLo.setWord(content.getLongValue());
+	    	}
+	    }
+
+	}
+	
+	/**
+	 * 
+	 * Method setMDR
+	 * @param content
+	 * method that sets the Word newMDR to set the MDR in refresh method 
+	 * 
+	 */	
+	public void setMDR(Word content){
+		
+		// checks if content is unsigned or not
+		if (content.isUnsigned()){
+			newMDR.setWordUnsigned(content.getLongValue());
+    	}else{
+    		newMDR.setWord(content.getLongValue());
+    	}
+
+	}
+
+	
+	/**
+	 * 
+	 * Method setRegA
+	 * @param content
+	 * method that sets the Word newRegA to set the RegA in refresh method 
+	 * 
+	 */	
+	public void setRegA(Word content){
+		
+		// checks if content is unsigned or not
+		if (content.isUnsigned()){
+			newRegA.setWordUnsigned(content.getLongValue());
+    	}else{
+    		newRegA.setWord(content.getLongValue());
+    	}
+		
+	}
+	
+	
+	/**
+	 * 
+	 * Method setRegB
+	 * @param content
+	 * method that sets the Word newRegB to set the RegB in refresh method 
+	 * 
+	 */	
+	public void setRegB(Word content){
+		
+		// checks if content is unsigned or not
+		if (content.isUnsigned()){
+			newRegB.setWordUnsigned(content.getLongValue());
+    	}else{
+    		newRegB.setWord(content.getLongValue());
+    	}	
+		
+	}
+	
+	
+	/**
+	 * 
+	 * Method setALUOut
+	 * @param content
+	 * method that sets the Word newALUOut to set the ALUOut in refresh method 
+	 * 
+	 */	
+	public void setALUOut(Word content){
+		
+		// checks if content is unsigned or not
+		if (content.isUnsigned()){
+			newALUOut.setWordUnsigned(content.getLongValue());
+    	}else{
+    		newALUOut.setWord(content.getLongValue());
+    	}
+
+	}
+	
+	/**
+	 * 
+	 * Method getIR
+	 * @param 
+	 * method returns the IR value.
+	 * 
+	 */
+	
+	public Word getIR(){
+		return IR.load();
+	}
+	
+	/**
+	 * 
+	 * Method getMDR
+	 * @param 
+	 * method returns the MDR value.
+	 * 
+	 */
+	
+	public Word getMDR(){
+		return MDR.load();
+	}
+	
+	
+	/**
+	 * 
+	 * Method getRegA
+	 * @param 
+	 * method returns the regA value.
+	 * 
+	 */
+	
+	
+	public Word getRegA(){
+		return regA.load();
+	}
+	
+	/**
+	 * 
+	 * Method getRegB
+	 * @param 
+	 * method returns the regB value.
+	 * 
+	 */
+	
+	public Word getRegB(){
+		return regB.load();
+	}
+	
+	/**
+	 * 
+	 * Method getHi
+	 * @param 
+	 * method returns the Hi value.
+	 * 
+	 */
+	
+	public Word getHi(){
+		return Hi.load();
+	}
+	
+	/**
+	 * 
+	 * Method getLo
+	 * @param 
+	 * method returns the Lo value.
+	 * 
+	 */
+	
+	public Word getLo(){
+		return Lo.load();
+	}
+	
+	/**
+	 * 
+	 * Method getALUOut
+	 * @param 
+	 * method returns the ALUOut value.
+	 * 
+	 */
+	
+	public Word getALUOut(){
+		return ALUOut.load();
+	}
+	
+	/**
+	 * 
+	 * Method getPC
+	 * @param 
+	 * method returns the PC value.
+	 * 
+	 */
+	
+	public Word getPC(){
+		return PC.load();
+	}
+	
+	/**
+	 * 
+	 * Method getNewIR
+	 * @param 
+	 * method returns the newIR value.
+	 * 
+	 */
+	
+	public Word getNewIR(){
+		return newIR;
+	}
+	
+	/**
+	 * 
+	 * Method refresh
+	 * @param 
+	 * this method updates the registers` values with the "new"
+	 * variables contents. This method is called in the end of each
+	 * clock.
+	 * Here the values are sent to each registers target class.
+	 */
+	
+	
+	public void refresh(){
+		
+		
+		Word aux = new Word(4);   	// aux used to calculate jumps address
+		Word aux2 = new Word(4);	// aux used to calculate jumps address
+		int auxInt;	// used to get IR content and calculate jump address 
+		
+		/*
+		 * IR refresh
+		 */
+		// newIr is stored in register IR 
+		IR.store(newIR);
+		// auxInt receives newIR content
+		auxInt = (int)newIR.getLongValue();		
+		// rt and rd fields are sent to mux regDest
+		regDest.setData(0, (auxInt & rtMask) >> 16 );
+		regDest.setData(1, (auxInt & rdMask) >> 11 );
+		// imm and shamt fields are to mux immOrShamt
+		immOrShamt.setData(0, (auxInt & immMask) );
+		immOrShamt.setData(1, (auxInt & shamtMask) >> 6);
+		
+		
+		/*
+		* Jump Address calculation
+		*/
+		// IR[25:0] is shifted left by 2 in shiftLeft2
+		shiftLeft2.setData( auxInt & instr25Mask );
+		aux = shiftLeft2.getData();
+		// PCSource receives aux & PC[31:28]
+		aux2 = PC.load();
+		auxInt = ( (int)(aux.getLongValue()) + ( (int)(aux2.getLongValue()) & 0xF0000000) );		
+		PCSource.setData(2, auxInt);
+		
+		/*
+		* PC refresh
+		*/
+		
+		// newPC is stored in register PC 
+		PC.store(newPC);
+		// newPC (PC content) is sent to multiplexers IorD, ALUSourceA and memTo Reg
+		IorD.setData(0, newPC);
+		ALUSourceA.setData(0, newPC);
+		memToReg.setData(2, newPC);
+		
+		//Hi refresh
+		Hi.store(newHi);
+		memToReg.setData(3, newHi);
+
+		//Lo refresh
+		Lo.store(newLo);
+		memToReg.setData(4, newLo);
+				
+		//MDR refresh		
+		MDR.store(newMDR);
+		memToReg.setData(1, newMDR);
+		
+		//regA refresh
+		regA.store(newRegA);
+		ALUSourceA.setData(1, newRegA);
+		PCSource.setData(3, newRegA);
+		
+		//regB refresh
+		regB.store(newRegB);
+		ALUSourceB.setData(0, newRegB);
+		
+		//ALUOut refresh
+		ALUOut.store(newALUOut);
+		PCSource.setData(1, newALUOut);
+		IorD.setData(1, newALUOut);
+		memToReg.setData(0, newALUOut);
+		
+	}
+	
+	
+	
+}

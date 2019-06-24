@@ -1,0 +1,849 @@
+package guiInterface;
+
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+
+import javax.swing.*;
+
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.util.Scanner;
+import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JInternalFrame;
+import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTable;
+
+import javax.swing.WindowConstants;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableModel;
+import javax.swing.SwingUtilities;
+
+import amnesiaCommons.Printer;
+import configuration.AmnesiaConfiguration;
+import control.AmnesiaControl;
+
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowFocusListener;
+
+
+
+/**
+* This code was edited or generated using CloudGarden's Jigloo
+* SWT/Swing GUI Builder, which is free for non-commercial
+* use. If Jigloo is being used commercially (ie, by a corporation,
+* company or business for any purpose whatever) then you
+* should purchase a license for each developer using Jigloo.
+* Please visit www.cloudgarden.com for details.
+* Use of Jigloo implies acceptance of these licensing terms.
+* A COMMERCIAL LICENSE HAS NOT BEEN PURCHASED FOR
+* THIS MACHINE, SO JIGLOO OR THIS CODE CANNOT BE USED
+* LEGALLY FOR ANY CORPORATE OR COMMERCIAL PURPOSE.
+*/
+public class NewSwingApp extends javax.swing.JFrame {
+
+	{
+		//Set Look & Feel
+		try {
+			javax.swing.UIManager.setLookAndFeel("com.sun.java.swing.plaf.gtk.GTKLookAndFeel");
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+	private String configurationFile;			// configuration file name
+	private boolean configurationFileLoaded;	// configuration file name
+	private String binaryCode;					// binary code file name
+	private Scanner in;							// keyboard input stream
+	private String command;						// command string
+	private PrintWriter outputStream;			// input and output streams
+	private BufferedReader inputStream; 		// input and output streams
+    private Printer printer;					// setting output buffer object     
+    private AmnesiaConfiguration configuration; // configuration object
+    private AmnesiaControl control; 			// Amnesia control object
+
+	private JMenuItem jOpenMenuItem;
+	private JMenu jMenuLoadProgram;
+	private JMenuItem hel;
+	private JPanel jPanel2;
+	private JPanel jPanel1;
+	private JDesktopPane jDesktop;
+	private JCheckBoxMenuItem instruction2;
+	private JCheckBoxMenuItem data2;
+	private JCheckBoxMenuItem instruction;
+	private JCheckBoxMenuItem data;
+	private JMenu l2;
+	private JMenu l1;
+	private JMenu Cache;
+	private JCheckBoxMenuItem Registers;
+	private JMenu cpu;
+	private JMenuItem close;
+	private JMenuItem rest;
+	private JMenuItem Or;
+	private JMenu Help;
+	private JMenu jViewMenu;
+	private JSeparator jSeparator1;
+	private JMenuItem pasteMenuItem;
+	private JMenuItem jRunMenuItem;
+	private JMenuItem cutMenuItem;
+	private JMenu jExecuteMenu;
+	private JMenuItem exitMenuItem;
+	private JSeparator jSeparator2;
+	private JMenuItem closeFileMenuItem;
+	private JMenuItem saveAsMenuItem;
+	private JMenuItem saveMenuItem;
+	private JMenuItem openFileMenuItem;
+	private JMenuItem newFileMenuItem;
+	private JMenu jMenu3;
+	private JMenuBar jMenuBarMain;
+	
+	//register
+	private JInternalFrame jRegisterFrame;
+	private JScrollPane jRegisterScrollPane;
+	private JPanel jRegisterPane;
+	
+	//config file
+	private JFrame jFrameFileChooser;
+	private JPanel jPanelLoadConfig;
+	private JFileChooser jFileChooser1;
+	private JScrollPane jScrollPaneCPURegisters;
+	//program
+	private JMenuItem jMenuItemLoad;
+	
+	//jTable
+	private JTable jTableCPURegisters;
+	/**
+	* Auto-generated main method to display this JFrame
+	*/
+	public static void main(String[] args) {
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				NewSwingApp inst = new NewSwingApp();
+				inst.setLocationRelativeTo(null);
+				inst.setVisible(true);
+			
+			}
+		});
+	}
+	
+	public NewSwingApp() {
+		
+		super("Amnesia");
+		// configuration file name
+	    configurationFile = null;
+
+	    // binary code file name
+	    binaryCode = null;
+
+	    // set default input to scanner object
+	    in = new Scanner(System.in);
+	    
+	    // configuration file loaded flag
+	    configurationFileLoaded = false;
+	    
+	    // command string (change information with the control object)
+	    command = null;
+		
+		
+		initGUI();
+	}
+	
+	private void initGUI() {
+		try {
+			getContentPane().add(getJDesktop(), BorderLayout.CENTER);
+			this.setSize(1280, 800);
+			
+			{
+				jMenuBarMain = new JMenuBar();
+				setJMenuBar(jMenuBarMain);
+				{
+					jMenu3 = new JMenu();
+					jMenuBarMain.add(jMenu3);
+					jMenu3.setText("Configuration File");
+					{
+						newFileMenuItem = new JMenuItem();
+						jMenu3.add(newFileMenuItem);
+						newFileMenuItem.setText("New");
+					}
+					{
+						openFileMenuItem = new JMenuItem();
+						jMenu3.add(openFileMenuItem);
+						openFileMenuItem.setText("Open");
+						openFileMenuItem.addActionListener(new ActionListener() {
+							public void actionPerformed(ActionEvent evt) {
+								jMenuItemLoadConfigurationActionPerformed(evt);
+							}
+						});
+					}
+					{
+						saveMenuItem = new JMenuItem();
+						jMenu3.add(saveMenuItem);
+						saveMenuItem.setText("Open Recent");
+					}
+					{
+						saveAsMenuItem = new JMenuItem();
+						jMenu3.add(saveAsMenuItem);
+						saveAsMenuItem.setText("Reset");
+					}
+					{
+						closeFileMenuItem = new JMenuItem();
+						jMenu3.add(closeFileMenuItem);
+						closeFileMenuItem.setText("Close");
+					}
+					{
+						jSeparator2 = new JSeparator();
+						jMenu3.add(jSeparator2);
+					}
+					{
+						exitMenuItem = new JMenuItem();
+						jMenu3.add(exitMenuItem);
+						exitMenuItem.setText("Exit");
+						exitMenuItem.addActionListener(new ActionListener() {
+							public void actionPerformed(ActionEvent evt) {
+								exitMenuItemAmnesiaActionPerformed(evt);
+							 }
+							});
+							
+					}
+				}
+				{
+					jExecuteMenu = new JMenu();
+					jMenuBarMain.add(jExecuteMenu);
+					jExecuteMenu.setText("Execute");
+					{
+						cutMenuItem = new JMenuItem();
+						jExecuteMenu.add(cutMenuItem);
+						cutMenuItem.setText("Step");
+					}
+					{
+						jRunMenuItem = new JMenuItem();
+						jExecuteMenu.add(jRunMenuItem);
+						jRunMenuItem.setText("Run");
+						jRunMenuItem.addActionListener(new ActionListener() {
+							public void actionPerformed(ActionEvent evt) {
+								jMenuRunActionPerformed(evt);
+							}
+						});
+					}
+					{
+						pasteMenuItem = new JMenuItem();
+						jExecuteMenu.add(pasteMenuItem);
+						pasteMenuItem.setText("Stop");
+					}
+					{
+						jSeparator1 = new JSeparator();
+						jExecuteMenu.add(jSeparator1);
+					}
+				}
+				{
+					
+					jMenuLoadProgram = new JMenu();
+					jMenuBarMain.add(jMenuLoadProgram);
+					jMenuLoadProgram.setText("Load Program");
+					{
+						jOpenMenuItem = new JMenuItem();
+						jMenuLoadProgram.add(jOpenMenuItem);
+						jOpenMenuItem.setText("Open");
+						//loading program file
+						jOpenMenuItem.addActionListener(new ActionListener() {
+							public void actionPerformed(ActionEvent evt) {
+								jMenuItemLoadActionPerformed(evt);
+							}
+						});
+					}
+					{
+						Or = new JMenuItem();
+						jMenuLoadProgram.add(Or);
+						Or.setText("Open Recent");
+					}
+					{
+						rest = new JMenuItem();
+						jMenuLoadProgram.add(rest);
+						rest.setText("Restart");
+					}
+					{
+						close = new JMenuItem();
+						jMenuLoadProgram.add(close);
+						close.setText("Close Program");
+					}
+				}
+				{
+					jViewMenu = new JMenu();
+					jMenuBarMain.add(jViewMenu);
+					jViewMenu.setText("View");
+					jViewMenu.add(getCpu());
+					jViewMenu.add(getCache());
+				}
+				{
+					Help = new JMenu();
+					jMenuBarMain.add(Help);
+					Help.setText("Help");
+					{
+						hel = new JMenuItem();
+						Help.add(hel);
+						hel.setText("Help");
+					}
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		jMenuLoadProgram.setEnabled(false);
+		jViewMenu.setEnabled(false);
+		jExecuteMenu.setEnabled(false);
+	}
+	
+	/**
+	 * Loading configuration event
+	 * @param evt
+	 */
+	private void jMenuItemLoadConfigurationActionPerformed(ActionEvent evt) {
+		System.out.println("jMenuItemLoadConfiguration.actionPerformed, event="+evt);
+		//TODO add your code for jMenuItemLoadConfiguration.actionPerformed
+		
+		
+		boolean fileRead = false;
+		getJFrameFileChooser();
+
+		// Create a File object containing the canonical path of the
+        // desired directory
+        File f;
+		try {
+			f = new File(new File(".").getCanonicalPath());
+			// Set the current directory
+	        jFileChooser1.setCurrentDirectory(f);
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    
+		// 
+		if(control != null){
+			
+			// halting the old control
+			outputStream.println("halt");
+
+			
+			try {
+				String returnMessage = inputStream.readLine();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		}
+        
+
+		// enabling JFileChooser
+		// Show dialog; this method does not return until dialog is closed
+		jFileChooser1.showOpenDialog(null);
+
+        // Get the selected file
+        File file = jFileChooser1.getSelectedFile();        
+
+        if (file != null){
+        	configurationFile = file.getAbsolutePath();
+			printer = new Printer();
+        	
+    		// instanciate configuration object
+    	    configuration = new AmnesiaConfiguration(printer);
+    	        
+    	    // configure Amnesia system
+    	    control = configuration.configure(configurationFile);
+    	    
+    	    System.out.println(printer.getDataOut());
+    	    
+    	    fileRead = true;
+        }
+		
+        
+        
+        if ( (control != null) && (fileRead) ){
+        	// creating control connection
+            try {
+    			createInterfaceConnection(control);
+    		} catch (UnknownHostException e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		} catch (IOException e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		}
+    		
+    		// enabling loadProgram buttons and JTabbedPAnes
+    		jMenuLoadProgram.setEnabled(true);
+    		jViewMenu.setEnabled(true);
+    		/*jButtonRun.setEnabled(false);
+    		
+    		
+    		
+    		// clearing all info
+    		clearAllFields();
+    		
+    		printAll();*/
+        }
+	}    
+	
+	/**
+	 * Creating interface connection
+	 * @param control
+	 * @throws UnknownHostException
+	 * @throws IOException
+	 */
+	private void createInterfaceConnection(AmnesiaControl control) 
+	throws UnknownHostException, IOException {
+	// creating connection socket			
+	InetAddress host = InetAddress.getByName("localhost");
+	Socket socket = new Socket(host,AmnesiaControl.PORT);		
+				
+	// starting control thread
+	Thread thread = new Thread(control);
+	thread.start();
+		
+	// setting input and output stream
+	outputStream = new PrintWriter(socket.getOutputStream(), true);
+	inputStream = new BufferedReader( new InputStreamReader(socket.getInputStream()));		
+}
+	
+	/**
+	 * EXITA AMNESIA
+	 * @param evt
+	 */
+	private void exitMenuItemAmnesiaActionPerformed(ActionEvent evt) {
+		System.out.println("jMenuItemExitAmnesia.actionPerformed, event="+evt);
+		//TODO add your code for jMenuItemExitAmnesia.actionPerformed
+		
+		if(control == null){
+			
+			System.exit(1);
+		}else{
+			
+			// send halt to control
+			outputStream.println("halt");
+			
+			// get return message
+			try {
+				String returnMessage = inputStream.readLine();
+				
+				
+				// verify return message
+				if(returnMessage.compareTo("halt") != 0) {
+					// if message not recognized show error message
+					// this is not supposed to happen
+					System.out.println("Comunication Error. Try running amnesia again.");				
+				}else{
+					
+					System.exit(1);
+				}
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+			control.closeConection();
+		}
+		
+		
+		
+	}
+
+	
+	/**
+	 * load program event
+	 * @param evt
+	 */
+	
+	private void jMenuItemLoadActionPerformed(ActionEvent evt) {
+		System.out.println("jMenuItemLoad.actionPerformed, event="+evt);
+		//TODO add your code for jMenuItemLoad.actionPerformed
+		
+		
+
+		// enabling JFileChooser
+		// Show dialog; this method does not return until dialog is closed
+		jFileChooser1.showOpenDialog(null);
+
+        // Get the selected file
+        File file = jFileChooser1.getSelectedFile();     
+		
+        String binaryFile = file.getAbsolutePath();
+        
+     // halting the old control
+		outputStream.println("lp " + binaryFile );
+
+		
+		try {
+			String returnMessage = inputStream.readLine();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		System.out.println(printer.getDataOut());
+		jExecuteMenu.setEnabled(true);
+		//jButtonRun.setEnabled(true);
+		
+		//printMainMemory();
+		
+}
+	/**
+	 * Run button event
+	 * @param evt
+	 */
+	private void jMenuRunActionPerformed(ActionEvent evt) {
+		
+		String returnMessage;
+		
+		System.out.println("jMenuRun.actionPerformed, event="+evt);
+		//TODO add your code for jButtonRun.actionPerformed
+		
+		 // halting the old control
+		outputStream.println("run");
+
+		
+		try {
+			returnMessage = inputStream.readLine();
+			
+
+
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		//System.out.println(printer.getDataOut());
+		
+}
+
+	private void jRegisterPopupActionPerformed(ActionEvent evt) {
+			//jRegisterFrame = new JInternalFrame("Register View",true,true,true,true);
+			//jRegisterFrame.setSize(new java.awt.Dimension(300, 300));
+			//jDesktop.add(jRegisterFrame);
+			if (Registers.isSelected() == true){
+				jRegisterFrame.setVisible(true);
+
+			}
+			else jRegisterFrame.setVisible(false);
+	}
+	
+	private void jInstructionCachelIPopupActionPerformed(ActionEvent evt) {
+		//jRegisterFrame = new JInternalFrame("Register View",true,true,true,true);
+		//jRegisterFrame.setSize(new java.awt.Dimension(300, 300));
+		//jDesktop.add(jRegisterFrame);
+		if (Registers.isSelected() == true){
+			jRegisterFrame.setVisible(true);
+
+		}
+		else jRegisterFrame.setVisible(false);
+}
+/************************************************************************************************************************/
+//print methods
+	
+private void printCPU(){
+		
+		String returnMessage;
+		
+		outputStream.println("cpu");
+		try {
+			returnMessage = inputStream.readLine();
+			if(returnMessage.compareTo("cpu") == 0 ){
+				// printing cpu 
+				String cpuString[] = printer.getCpu().split("//");
+				
+				// printing all cpu registers
+				printRegisters(cpuString[0].split("\\|"), cpuString[1].split("\\|"));
+				
+				// printing cycle
+				printCPUCycle(cpuString[2].split("\\|"));
+
+			}
+			
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
+	}
+	
+	
+private void printRegisters(String registerBank[], String[] internalRegisters){
+		
+		String[] registersNames = {"r0", "at", "v0", "v1", "a0", "a1", "a2", "a3", 
+				"t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3", 
+				"s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "s8", "ra"};
+		
+		String[] internalRegistersNames = {"PC", "IR", "MDR", "RegA", "RegB", "ALUOut", "LO", "HI"};
+		
+		Object[][] modelData = new Object[ 11 ][ 8 ];
+		String[] columnNames = new String[8];
+		
+		
+		int column = 0;
+		
+		// printing registers Bank
+		for(int i = 0; i < registerBank.length; ++i){
+
+			int line = i % 8;
+
+			modelData[line][column] = registersNames[i].concat(" (R" + Integer.toString(i) + ")"); 
+			modelData[line][column + 1] = formatHexString(Integer.toHexString( new Integer(registerBank[i]) )); 
+			
+			if( ( (i + 1) % 8) == 0){
+				columnNames[column] = "Register";
+				columnNames[column + 1] = "Data";
+				column+=2;
+			}
+			          
+			
+		}
+		
+		column = 0;
+		// printing internal registers
+		for(int i = 0; i < internalRegisters.length; ++i){
+
+			int line = (i % 2) + 9;
+			
+			modelData[line][column] = internalRegistersNames[i]; 
+			modelData[line][column + 1] = formatHexString(Integer.toHexString( new Integer(internalRegisters[i]) )); 
+			
+			if( ( (i + 1) % 2) == 0){
+				column+=2;
+		
+			}
+		}	
+		System.out.println();
+
+
+		AmnesiaTableModel model = new AmnesiaTableModel(modelData);
+		model.setColumnNames(columnNames);
+		jTableCPURegisters.setModel(model);
+		
+		
+	}
+	
+private void printCPUCycle(String[] cycle) {
+	// TODO Auto-generated method stub
+	String CPUCycle = new String();
+	for(int i = 0; i < cycle.length; ++i){
+		
+		CPUCycle = CPUCycle.concat("\n\nCPU cycle " + cycle[i]);
+		
+		System.out.print("\n\nCPU cycle " + cycle[i]);
+	}
+	CPUCycle = CPUCycle.concat("\n");
+	
+	System.out.println();
+	
+}
+
+private String formatHexString(String hexString) {
+	// TODO Auto-generated method stub
+	String invalid0 = "0";
+	String result = "0x";
+	
+	// inserting 0 considering word size representation
+	for(int i = hexString.length(); i < 8; ++i){		
+		hexString = invalid0.concat(hexString);
+	}
+			
+	return result.concat(hexString);
+}
+	
+	
+/************************************************************************************************************************/
+	
+	private JFrame getJFrameFileChooser() {
+		if(jFrameFileChooser == null) {
+			jFrameFileChooser = new JFrame();
+			jFrameFileChooser.setPreferredSize(new java.awt.Dimension(521, 358));
+			{
+				jPanelLoadConfig = new JPanel();
+				jFrameFileChooser.getContentPane().add(jPanelLoadConfig, BorderLayout.CENTER);
+				jPanelLoadConfig.setPreferredSize(new java.awt.Dimension(544, 315));
+				jPanelLoadConfig.add(getJFileChooser1());
+			}
+			jFrameFileChooser.setSize(521, 358);
+		}
+		return jFrameFileChooser;
+	}
+	
+	
+	private JFileChooser getJFileChooser1() {
+		if(jFileChooser1 == null) {
+			jFileChooser1 = new JFileChooser();
+		}
+		
+		return jFileChooser1;
+	}
+	
+	private JMenu getCpu() {
+		if(cpu == null) {
+			cpu = new JMenu();
+			cpu.setText("CPU");
+			cpu.add(getRegisters());
+		}
+		return cpu;
+	}
+	
+	private JCheckBoxMenuItem getRegisters() {
+		if(Registers == null) {
+			Registers = new JCheckBoxMenuItem("Registers",false);
+			jRegisterFrame = new JInternalFrame("Register View",true,false,true,true);
+			jRegisterFrame.setSize(new java.awt.Dimension(250, 250));
+			jDesktop.add(jRegisterFrame);
+			jRegisterPane = new JPanel();
+			jRegisterScrollPane = getJScrollPaneCPURegisters();
+			jRegisterScrollPane.setSize(200, 200);
+			jRegisterFrame.getContentPane().add(jRegisterScrollPane);
+			jRegisterFrame.getContentPane().validate();
+
+			
+			
+			
+			Registers.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent evt) {
+					jRegisterPopupActionPerformed(evt);
+				}
+			});
+			
+			
+		}
+		jRegisterFrame.setVisible(false);
+		return Registers;
+	}
+	
+	private JMenu getCache() {
+		if(Cache == null) {
+			Cache = new JMenu();
+			Cache.setText("Cache");
+			Cache.add(getL1());
+			Cache.add(getL2());
+		}
+		return Cache;
+	}
+	
+	private JMenu getL1() {
+		if(l1 == null) {
+			l1 = new JMenu();
+			l1.setText("L1");
+			l1.add(getData());
+			l1.add(getInstruction());
+		}
+		return l1;
+	}
+	
+	private JMenu getL2() {
+		if(l2 == null) {
+			l2 = new JMenu();
+			l2.setText("L2");
+			l2.add(getData2());
+			l2.add(getInstruction2());
+		}
+		return l2;
+	}
+	
+	private JCheckBoxMenuItem getData() {
+		if(data == null) {
+			data = new JCheckBoxMenuItem();
+			data.setText("Data");
+		}
+		return data;
+	}
+	
+	private JCheckBoxMenuItem getInstruction() {
+		if(instruction == null) {
+			instruction = new JCheckBoxMenuItem();
+			instruction.setText("Instruction");
+		}
+		return instruction;
+	}
+	
+	private JCheckBoxMenuItem getData2() {
+		if(data2 == null) {
+			data2 = new JCheckBoxMenuItem();
+			data2.setText("Data");
+		}
+		return data2;
+	}
+	
+	private JCheckBoxMenuItem getInstruction2() {
+		if(instruction2 == null) {
+			instruction2 = new JCheckBoxMenuItem();
+			instruction2.setText("Instruction");
+		}
+		return instruction2;
+	}
+
+	private JMenuItem getJMenuItemLoad() {
+		if(jMenuItemLoad == null) {
+			jMenuItemLoad = new JMenuItem();
+			jMenuItemLoad.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent evt) {
+					jMenuItemLoadActionPerformed(evt);
+				}
+			});
+		}
+		return jMenuItemLoad;
+	}
+	
+	private JScrollPane getJScrollPaneCPURegisters() {
+		if(jScrollPaneCPURegisters == null) {
+			jScrollPaneCPURegisters = new JScrollPane();
+			jScrollPaneCPURegisters.setViewportView(getJTableCPURegisters());
+		}
+		return jScrollPaneCPURegisters;
+	}
+	
+	private JTable getJTableCPURegisters() {
+		if(jTableCPURegisters == null) {
+			jTableCPURegisters = new JTable();
+			jTableCPURegisters.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+		}
+		return jTableCPURegisters;
+	}
+	
+	private JDesktopPane getJDesktop() {
+		if(jDesktop == null) {
+			jDesktop = new JDesktopPane();
+			jDesktop.setPreferredSize(new java.awt.Dimension(698, 257));
+		}
+		return jDesktop;
+	}
+	
+	private JPanel getJPanel1() {
+		if(jPanel1 == null) {
+			jPanel1 = new JPanel();
+			jPanel1.setBounds(72, 61, 10, 10);
+		}
+		return jPanel1;
+	}
+	
+	private JPanel getJPanel2() {
+		if(jPanel2 == null) {
+			jPanel2 = new JPanel();
+			jPanel2.setBounds(90, 51, 10, 10);
+		}
+		return jPanel2;
+	}
+
+}
+
+	

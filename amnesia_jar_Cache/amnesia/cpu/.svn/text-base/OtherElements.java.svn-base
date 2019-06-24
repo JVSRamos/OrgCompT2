@@ -1,0 +1,28 @@
+package cpu;
+import amnesiaCommons.*;
+
+
+/**
+ * 
+ * @author Jordan Herbert Santos
+ *
+ */
+
+public abstract class OtherElements implements Observer {
+	
+	private int controlSigns;
+	
+		
+	public abstract void setData(int position, Word data);
+	
+	public abstract Word getData();
+	
+	public void update(int controlSigns){
+		this.controlSigns = controlSigns;
+	}
+	
+	public int getControlSigns(){
+		return controlSigns;
+	}
+	
+}

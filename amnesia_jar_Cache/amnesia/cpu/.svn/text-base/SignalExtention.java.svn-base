@@ -1,0 +1,53 @@
+package cpu;
+import amnesiaCommons.*;
+
+/**
+ * 
+ * @author jordan
+ * atualizado em 11/10 por Jordan
+ * atualizado em 17/10 por Jordan
+ * 
+ */
+
+
+public class SignalExtention extends OtherElements{
+	private Word content;
+	private long aux;
+	
+	public SignalExtention(){
+		
+		content = new Word(4);
+	}
+
+	public void setData(int position, Word data){	
+	    aux = (short)data.getLongValue() & 0xFFFF; //getting 16 bits only   
+		content.setWord(aux);
+	}
+	public void setData(Word data){ 
+		setData(0, data);
+	}
+	
+	/**
+	 * Method getData
+	 *
+	 */
+	public Word getData(){
+		
+		if ( (super.getControlSigns() & 0x00000008) == 0 ){ 
+			// unsigned
+			aux = (int)(content.getLongValue() << 16) >>> 16;
+			content.setWord( aux );
+			return content; 
+		}
+		else{// signed
+			aux = (int)(content.getLongValue() << 16) >> 16;
+			content.setWord( aux );
+			return content;
+		}
+			
+	}
+	
+	public void update(int controlSigns){
+		super.update(controlSigns);
+	}
+}

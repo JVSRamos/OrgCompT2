@@ -1,0 +1,430 @@
+package cpu;
+import amnesiaCommons.*;
+
+
+/**
+ * @author Bruno Henrique Olveira, Guilherme Rodrigues Buzo and Jordan Herbert Santos
+ *
+ *
+ * alterado em 25/09/2007 por Jordan
+ * alterado em 10/10 por Jordan
+ * alterado em 17/10 por Jordan
+ */
+
+public class ControlUnit {
+
+
+	// PRIVATE ATRIBUTES
+	/********************************************************************/
+	//
+	private int opcode;       	// OPCODE USED TO GENERATE CONTROL SIGNS
+	private int funct;        	// FUNCT USED TO GENERATE CONTROL SIGNS
+	private int controlSigns;  	// CONTROL SIGNS 
+	private int state;       	// CONTROLS THE CURRENT STATE
+	private int nextState;		// CONTROLS THE NEXT STATE
+	private Word IR;			// WORD TO KEEP REGISTER�S IR CONTENT
+	private int totalCPUCicles;
+
+	
+	CPUInternalRegisters CPURegisters; //CPUInternalRegister to get IR�s content
+	
+	/* ***************************************************************************/
+
+	/**
+	 * Constructor
+	 **/	
+	public ControlUnit(CPUInternalRegisters CPURegisters){
+		
+		state = 0;
+		nextState = 0;
+		totalCPUCicles = 0;
+		this.CPURegisters = CPURegisters;
+	
+		
+		
+		
+	}
+	
+	/**
+	 * 
+	 * Method setControlSigns
+	 * @param  
+	 * method that generates the controlSigns according to the current state and the 
+	 * IR register`s value
+	 * 
+	 */
+	
+	public void setControlSigns(){
+		
+	
+		
+		switch (state){
+		case(0): // fetch instruction
+			
+			controlSigns = 0x00202122;		
+			nextState = 1;			
+			break;
+		
+		case(1): // registers fetch / instruction decode
+			
+			
+			controlSigns = 0x00600008;
+			
+			
+			IR = CPURegisters.getIR();
+			
+			funct = (int)( IR.getLongValue() & 0x3F );
+			opcode = ( ( (int)IR.getLongValue() & 0xFC000000 ) >>> 26 );
+			
+			switch (opcode){
+			case (0x00):
+				switch (funct){
+				// logic and arithmetic
+				case (0x20): //add
+				case (0x21): //add uns
+				case (0x22): //sub
+				case (0x23): //sub uns
+				case (0x24): // and
+				case (0x25): //or
+				case (0x27): //nor
+				case (0x2A): //SLT
+				case (0x2B): //SLT uns
+					nextState = 2;
+					break;
+				// multiplications and divisions	
+				case (0x18): //mul
+				case (0x19): // mul uns
+			    case (0x1A): // div
+			    case (0x1B): // div uns
+			    	nextState = 3;
+			    	break;
+				//shifts
+				case (0x00): 
+				case (0x02):
+					nextState = 4;
+					break;
+				
+				case (0x08): // jump register
+					nextState = 8;
+					break;
+				
+				case (0x10): // move from hi
+					nextState = 7;
+					break;
+				
+				case (0x12): // move from lo
+					nextState = 6;
+					break;
+				// if switch field doesn't match any case above
+				// the instruction is wrong
+				default: System.err.printf("Wrong Instruction\nPlease Check The Program File\n");// wrong instruction
+						 System.exit(1);
+					// throw wrongIntructionException();
+
+				}//end switch(funct)
+				break;
+			case (0x0C): // and imm
+				nextState = 9; 
+				break;
+			
+			
+			case (0x0D): // or imm
+				nextState = 10; 
+				break;
+			
+			
+			case (0x08): // add imm
+				nextState = 11; 
+				break;
+			
+			
+			case (0x09): // add imm unsigned
+				nextState = 12; 
+				break;
+			
+			
+			case (0x0A): // set less than imm
+				nextState = 13; 
+				break;
+			
+			
+			case (0x0B): // set less than imm unsigned
+				nextState = 14; 
+				break;
+			
+			
+			// loads
+			case (0x23): 
+			case (0x24):
+			case (0x25):
+				nextState = 16;
+				break;
+			
+			case (0x0F): // Load Upper imm
+				nextState = 21; 
+				break;
+			
+			// stores
+			case (0x28):
+			case (0x29): 
+			case (0x2B):
+				nextState = 22;
+				break;
+			
+			case (0x04): // BEQ
+				nextState = 26; 
+				break;
+						
+			case (0x05): // BNQ
+				nextState = 27;
+				break;
+						
+			case (0x02):  // jump
+				nextState = 28;
+				break;
+			
+			case (0x03): // jump and link 
+				nextState = 29; 
+				break;
+			// if opcode field doesn�t match any case above
+			// the instruction is wrong
+			default: System.err.printf("Wrong Instruction\nPlease Check The Program File");// wrong instruction
+
+					System.exit(1);
+					// throw wrongIntructionException();	
+				
+	
+				
+			}//end switch(opcode)
+			break;
+		case(2): // logic and arithmetic execution
+			
+			controlSigns = 0x000A0000;
+			nextState = 5; 
+			break; 
+			
+
+		
+		case(3): // mul and div conclusion
+			
+			controlSigns = 0x000A0050;
+			nextState = 0;
+			break;
+		
+		case(4): // shifts execution
+
+			controlSigns = 0x004A0800;
+			nextState = 5;
+			break;
+			
+		case(5): // logic and arithmetics execution
+			
+			controlSigns = 0x02000400;
+			nextState = 0;
+			break;
+		
+		case(6): // move from lo conclusion
+			
+			controlSigns = 0x02010400;
+			nextState = 0;
+			break;
+		
+		case(7): // move from Hi conclusion
+			
+			controlSigns = 0x0200C400;
+			nextState = 0;
+			break;
+		
+		case(8): // jump register conclusion
+			
+			controlSigns = 0x01800100;
+			nextState = 0;
+			break;
+		
+		case(9): // and imm execution
+				
+			controlSigns = 0x00520000;
+			nextState = 15;
+			break;
+		
+		case(10): // or imm execution 
+			
+			controlSigns = 0x00560000;
+			nextState = 15;
+			break;
+
+		case(11): // add imm execution
+			
+			controlSigns = 0x00420008;
+			nextState = 15;
+			break;
+
+		case(12): // and imm uns execution
+			
+			controlSigns = 0x004E0008;
+			nextState = 15;
+			break;
+
+		case(13): // slt imm execution
+			
+			controlSigns = 0x005A0008;
+			nextState = 15;
+			break;
+
+		case(14): // slt imm uns execution
+			
+			controlSigns = 0x005C0008;
+			nextState = 15;
+			break;
+		
+		case(15): // imm instructions conclusion
+			
+			controlSigns = 0x00000400;
+			nextState = 0;
+			break;
+		
+		case(16): // memory address calculation
+			
+			controlSigns = 0x00420008;
+			switch(opcode){
+			case (0x24): // load byte
+				nextState = 17;
+				break;
+			case (0x25):// load halfword
+				nextState = 18;
+				break;
+			case (0x23):// load word
+				nextState = 19;
+				break;
+			}
+			break;
+		
+		case(17): // load byte execution
+			
+			controlSigns = 0x00003000;
+			nextState = 20;
+			break;
+		
+		case(18): // load halfword execution
+			
+			controlSigns = 0x00003001;
+			nextState = 20;
+			break;
+		
+		case(19): // load word execution
+			
+			controlSigns = 0x00003002;
+			nextState = 20;
+			break;
+		
+		case(20): // loads conclusion and memory read
+			
+			controlSigns = 0x00004400;
+			nextState = 0;
+			break;
+		
+		case(21): // load upper immediate conclusion
+			
+			controlSigns = 0x08014000;
+			nextState = 0;
+			break;
+		
+		case(22): // memory address calculation
+			
+			controlSigns = 0x00420008;
+			switch (opcode){ 
+			case (0x28):// store byte			
+				nextState = 23;
+				break;
+			
+			case (0x29):// store halfword
+				nextState = 24;
+				break;
+			
+			case (0x2B):// store word
+				nextState = 25;
+				break;
+			}//end switch(opcode)
+			break;
+			
+		case(23): // store byte conclusion 
+			
+			controlSigns = 0x00001080;
+			nextState = 0;
+			break;
+		
+		case(24): // store halfword conclusion
+			
+			controlSigns = 0x00001081;
+			nextState = 0;
+			break;
+		
+		case(25): // store word conclusion
+			
+			controlSigns = 0x00001082;
+			nextState = 0;
+			break;
+		
+		case(26): //BEQ conclusion
+			
+			controlSigns = 0x00860200;
+			nextState = 0;
+			break;
+		
+		case(27): // BNE conclusion
+			
+			controlSigns = 0x00860204;
+			nextState = 0;
+			break;
+		
+		case(28): // jump conclusion
+			
+			controlSigns = 0x01000100;
+			nextState = 0;
+			break;
+		
+		case(29): // jump and link conclusion
+			
+			controlSigns = 0x05008500;
+			nextState = 0;
+			break;
+		}// end switch(state)
+		
+		
+		if (nextState == 3) 
+			// multiplication cicles
+			totalCPUCicles += 10;
+		else
+			totalCPUCicles += 1;
+	
+		state = nextState;
+		
+	
+		
+	}// end setDataIn
+	
+	/**
+	 * 
+	 * Method getControlSigns
+	 * @param 
+	 * method that returns the controlSigns
+	 * 
+	 */
+	public int getControlSigns(){
+		return controlSigns;
+	}
+
+	
+	public int getCPUCicles(){
+		return totalCPUCicles;
+	}
+	
+	
+	public int getState(){
+		return state;
+	}
+	
+	public String getIR(){
+		return Long.toHexString(IR.getLongValue());
+	}	
+}

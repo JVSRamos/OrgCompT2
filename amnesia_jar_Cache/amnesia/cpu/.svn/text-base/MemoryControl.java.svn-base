@@ -1,0 +1,286 @@
+/**
+ * 
+ */
+package cpu;
+import control.AmnesiaControl;
+import amnesiaCommons.*;
+import cache.*;
+import virtualMemory.*;
+
+
+/**
+ * @author Bruno Henrique Olveira, Guilherme Rodrigues Buzo and Jordan Herbert Santos
+ *
+ *
+ * alterado em 21/08/2007 por Jordan
+ */
+public class MemoryControl implements Observer{
+	
+	// PRIVATE ATRIBUTES
+	/********************************************************************/
+	//
+
+	private Word dataIn;  // DATA TO WRITE IN MEMORY
+	private Word dataOut; // DATA RECEIVED FROM MEMORY
+	//private AccessInfo accessInfo;
+	private final int wordSize = 4;
+	private final int blockSize = 1;
+
+	//Masks
+	private final int maskBHW = 0x00000003;  
+	private final int maskMemWrite = 0x00000080;
+	private final int maskMemRead = 0x00002000;
+	
+	// VIRTUAL MEMORY, INSTRUCTION AND DATA CACHE AND MAIN MEMORY
+	// OBJECTS. 
+	private VirtualMemory virtualMemory;	
+	
+	
+	private Cache instructionL1;
+	private Cache dataL1;	
+	private MainMemory mainMemory;
+	
+	// PROCESSOR OBJECTS 
+	private ControlUnit controlUnit;
+	private Multiplexer IorD;
+	private CPUInternalRegisters CPURegisters;
+
+	// CONTROL SIGNS
+	private byte memWrite;
+	private byte memRead;
+	private int BHW;
+
+	
+	/* ***************************************************************************/
+    private AmnesiaControl control;
+    private Printer printer;
+	/**
+	 * Constructor
+	**/ 
+
+	public MemoryControl(Multiplexer IorD, 
+			CPUInternalRegisters CPURegisters, ControlUnit controlUnit){
+	 	
+	
+		this.controlUnit = controlUnit;
+		this.IorD = IorD;
+		this.CPURegisters = CPURegisters;
+		
+
+		dataIn = new Word(wordSize);  
+		dataOut = new Word(wordSize); 
+		control = null;
+		printer = new Printer();
+		
+    }
+        	// METHODS         	
+	// /* ***************************************************************************/
+
+
+	
+	public void update(int controlSigns)
+	{
+		//RECEIVES CONTROLS FROM CONTROL UNIT
+		memRead = (byte)( ( controlSigns & maskMemRead ) >>> 13 );
+		memWrite = (byte)( ( controlSigns & maskMemWrite ) >>> 7 ); 
+		BHW = (controlSigns & maskBHW);
+		memoryAccess();
+		
+		
+	}
+	
+	
+	
+	
+	
+	/* ***************************************************************************/	
+	/**
+	 * Method that invokes the cache or main memory. Depending on the operation, 
+	 * the cache or main memory will load or store data.
+	 * @param phisycalAddress, data, operation
+	 *
+	 */ 
+	/* ***************************************************************************/
+	private void memoryAccess(){
+		
+		int auxDataOut;
+		Word address = new Word(wordSize);
+		long wordContent;
+		address = IorD.getData();
+		Block readData;
+		
+				
+		// shifting right 2 because memory's addresses are words
+		wordContent = ( address.getLongValue() >> 2);
+		address.setWord(wordContent);	
+		
+		String virtualaddress = printer.formatHexString(Long.toHexString(address.getLongValue()));
+		// If virtual memory exists, the real address is obtained.
+		// the real address is word 0 from the Block returned by the virtualMemory.load()
+		if ( (virtualMemory != null) && ( ( memRead == 1 ) || ( memWrite == 1 )  ) ){
+			if(control != null){
+				String location = String.format("Starting memory access"); 
+				String addressString = String.format("\n%s\n%s", 
+						 virtualaddress,"Still not translated");
+				control.pause("memorycontrol|"+location+"|address", addressString );
+			}	
+			
+			// If virtual memory exists, the real address is obtained.
+			// the real address is word 0 from the Block returned by the virtualMemory.load()
+			if ( (virtualMemory != null) && ( ( memRead == 1 ) || ( memWrite == 1 )  ) ){
+				
+				//address = virtualMemory.load(address, (controlUnit.getControlSigns() == 0), (memWrite == 1)).getWord(0);
+				address = virtualMemory.load(address, (controlUnit.getState() == 0), (memWrite == 1)).getWord(0);
+
+			}
+			
+			//checks if the virtual address is out of the total memory size
+			if (address.getLongValue() > (virtualMemory.getMemorySize() + mainMemory.getMemorySize())-1 || address.getLongValue() < 0){
+				System.err.printf("Trying to Access The Unexistent Memory Position ");
+				System.err.printf(printer.formatHexString(Long.toHexString(address.getLongValue())));
+				System.err.printf("\nPlease Check The Program File On The Following Line Where The Program Stopped\n");
+				int i = 0;
+				
+				if(controlUnit.getIR().length() <= 8){
+					
+					while(control.getInstructionLine(i).contains(controlUnit.getIR())==false)
+					  i++;
+				}
+				else {
+					
+					String cod = controlUnit.getIR().substring(8);
+					//System.err.printf(i);
+					while(control.getInstructionLine(i).contains(cod) == false)
+						  i++;  
+					
+					}
+				System.err.printf(control.getInstructionLine(i));
+				System.err.printf("\n");
+				
+				
+				
+				System.exit(1);
+			}	 
+		}
+			//checks if the address is out of the of the main memory range
+		else if(address.getLongValue() > mainMemory.getMemorySize()-1 || address.getLongValue() < 0){
+			System.err.printf("Trying to Access The Unexistent Memory Position ");
+			System.err.printf(printer.formatHexString(Long.toHexString(address.getLongValue())));
+			System.err.printf("\nPlease Check The Program File On The Following Line Where The Program Stopped\n");
+			int i = 0;
+			
+			if(controlUnit.getIR().length() <= 8){
+				
+				while(control.getInstructionLine(i).contains(controlUnit.getIR())==false)
+				  i++;
+			}
+			else {
+				
+				String cod = controlUnit.getIR().substring(8);
+				//System.err.printf(i);
+				while(control.getInstructionLine(i).contains(cod) == false)
+					  i++;  
+				
+				}
+			System.err.printf(control.getInstructionLine(i));
+			System.err.printf("\n");
+			
+			
+			
+			System.exit(1);
+		}	 
+		if(control != null && ( ( memRead == 1 ) || ( memWrite == 1 ) ) ){
+			String location = String.format("Starting memory access"); 
+			String addressString = String.format("\n%s\n%s", 
+					 virtualaddress,printer.formatHexString(Long.toHexString(address.getLongValue())));
+			control.pause("memorycontrol|"+location+"|address", addressString );
+		}	
+		if (memRead == 1){// read
+			
+			//dataOut = cache.start ( physicalAddress );//Read			
+			if (instructionL1 != null){// instruction and data caches splitted
+				if (controlUnit.getState() == 1){
+					// instruction cache
+					readData = instructionL1.start(address);
+				}else{
+					// data cache
+					readData = dataL1.start(address);
+					
+				}
+			}else{ 
+				if (dataL1 == null){ // without caches
+					readData = mainMemory.start(address);
+				}else{ // unified cache
+					readData = dataL1.start(address);
+				}
+			}
+			
+			dataOut.setWord(readData.getWord(0).getLongValue());
+			auxDataOut = (int)dataOut.getLongValue();
+		
+			if (BHW == 1) dataOut.setWord( auxDataOut & 0x0000FFFF );
+			if (BHW == 0) dataOut.setWord( auxDataOut & 0x000000FF );
+			
+			CPURegisters.setIR(dataOut);	
+			CPURegisters.setMDR(dataOut);
+
+		}
+		else
+			if (memWrite == 1) //write
+			{	
+	
+				dataIn = CPURegisters.getRegB(); //DATA FOR WRITE
+				
+				if (BHW == 1) dataIn.setWord(dataIn.getLongValue() & 0x0000FFFF);
+				if (BHW == 0) dataIn.setWord(dataIn.getLongValue() & 0x000000FF);
+				
+				
+				Block data = new Block(blockSize, wordSize);
+				data.setWord(dataIn, 0);
+				
+				if (dataL1 == null){
+					
+					mainMemory.start(address, data);
+				}
+					else{ 
+					
+			        dataL1.start(address,data);
+				}
+			   }
+				
+	}//end method memoryAccess
+
+	
+	
+	public void setDataCache(Cache cache){
+	    this.dataL1 = cache;
+    }
+
+    public void setInstructionCache(Cache cache){
+	    this.instructionL1 = cache;
+    }
+
+    public void setMainMemory(MainMemory mainMemory){
+	    this.mainMemory = mainMemory;
+    }
+
+    public void setVirtualMemory(VirtualMemory virtualMemory){
+	    this.virtualMemory = virtualMemory;
+    }
+    
+    public int getWordSize(){
+        return wordSize;
+    }
+
+    public int getBlockSize(){
+        return blockSize;
+    }
+    
+    /**
+	 * Set control object for communication engine-control.
+	 * @param AmnesiaControl control - control object
+	 */
+	public void setControl(AmnesiaControl control){ 
+		this.control = control;
+	}
+}// class Memory Control

@@ -1,0 +1,765 @@
+package virtualMemory;
+
+//import Cache.Cache;
+import amnesiaCommons.AccessInfo;
+import amnesiaCommons.Block;
+import amnesiaCommons.Memory;
+import amnesiaCommons.MainMemory;
+import amnesiaCommons.Word;
+import amnesiaCommons.Printer;
+import control.AmnesiaControl;
+import cache.Cache;
+
+/**
+ * This class implements the virtual memory in Amnesia. Uses and manage the following objects 
+ * TLB (a cache object), pageTable and Disk.
+ * It's function is to translate the virtual address to a real one.  
+ */
+
+/**
+ * @author Guilherme Rodrigues Buzo, Vinicius Gobbo Antunes de Oliveira
+ */
+public class VirtualMemory extends Memory{
+
+	// if we have splitted TLB, both cache attributes will be used. Otherwise, only data TLB will be used.
+	public Cache instructionTLB;
+	public Cache dataTLB;			// this is the principal TLB.
+	
+	// words per page.
+	private int pageSize;
+	
+	// number of pages.
+	private int numberOfPages;		// total number of pages (MM plus Disk).
+	private int numberOfDiskPages;	// number of pages that can be stored on disk.
+	
+	// the Page Table object.
+	private PageTable pageTable;
+	
+	// some pages.
+	private Page pageIn;
+	private Page pageOut;
+	
+	// the Main Memory object.
+	private MainMemory mainMemory;
+	
+	// the disk object.
+	private Disk disk;
+	
+	// the replacement algorithm
+	private int replacementAlgorithm; 
+	public static final int LRU = 0;
+	public static final int NRU = 1;
+	
+	// the amount of bits that contains the Virtual Page Number
+	private int virtualPageNumberSize;
+
+	// the amount of bits that should be able to keep the PageOffset
+	private int pageOffSetSize;
+	
+	// the amount of bits necessary to keep the physical Frame Address
+	private int physicalFrameAddressSize;
+	
+	// write cicle?
+	private boolean writeCycle;
+	
+	// data cyicle?
+	private boolean dataCycle;
+	
+	// control
+	private AmnesiaControl control,controller;
+	
+	AccessInfo accessInfoObj;
+	
+	private Printer printer;
+
+	/**
+	 * Constructor that sets all the initial values for VirtualMemory, and creates the necessary objects
+	 * @param memorySize ( number of blocks ), blockSize, wordSize
+	 */
+	public VirtualMemory(int pageSize, int wordSize, int blockSize, int ciclesPerAccess, int diskMemorySize, 
+			int diskMultFactor, MainMemory mainMemory, int replacementAlgorithm, Cache dataTLB, Cache instructionTLB, AmnesiaControl control ){
+
+		//super(wordSize, blockSize, ciclesPerAccess, mainMemory.getBlockSize()*mainMemory.getMemorySize(), accessInfoObj);
+		super(wordSize, blockSize, ciclesPerAccess, mainMemory.getMemorySize() );
+		
+		this.accessInfoObj = new AccessInfo();
+		this.control = control;
+		
+		this.mainMemory = mainMemory;
+		// pageSize in Words
+		this.pageSize = pageSize;
+		
+		numberOfDiskPages = (int)Math.floor(diskMemorySize / pageSize);
+		this.numberOfPages = (int)Math.floor(getMemorySize() / pageSize) + numberOfDiskPages;
+		// the page table will be stored in main memory too, so, we must not let the application use the page table memory space.		
+		int pagesInPageTable = numberOfPages; 
+		int i;
+		
+		if ((numberOfPages % pageSize) == 0){
+			i = (numberOfPages/pageSize);
+		}else
+			i = (numberOfPages/pageSize) + 1;
+		numberOfPages -= i;
+	
+		// if we have not enough main memory to store the page table and an application page, this an error!
+		if ( numberOfPages <= numberOfDiskPages ) {
+			// only disk pages lasts.
+			System.out.println("ERROR: There is not enough memory in main memory to store the page table and at least an application page!");
+		} else { // there is enough main memory memory to store the page table and at least an application page.
+		
+			// the amount of bits that contains the Virtual Page Number.
+			this.virtualPageNumberSize = (int) Math.ceil( Math.log( this.getNumberOfPages() ) / Math.log( 2 ) );
+			
+			// the amount of bits that should be able to keep the PageOffset
+			this.pageOffSetSize = (int) Math.ceil( Math.log( pageSize ) / Math.log( 2 ) );
+			
+			// the amount of bits necessary to keep the physical Frame Address
+			this.physicalFrameAddressSize = (int) Math.ceil( Math.log( numberOfPages ) /  Math.log( 2 ) )  ;
+	
+			this.replacementAlgorithm = replacementAlgorithm;
+			
+			// instance of the object pageTable
+			pageTable = new PageTable( pagesInPageTable, wordSize, blockSize, mainMemory.getCiclesPerAccess(), 
+	                        getMemorySize(), this.mainMemory, this.replacementAlgorithm, physicalFrameAddressSize, 
+	                        pageSize, instructionTLB, dataTLB );
+			
+			
+			
+			this.dataTLB = dataTLB;
+			this.instructionTLB = instructionTLB;
+			
+			//sets the type of the cache for the pause mode impression methods
+			if (this.instructionTLB != null){
+				this.instructionTLB.setType("instructionCache");
+				this.instructionTLB.setisTLB(true);
+			}	
+			if (this.dataTLB != null){
+				this.dataTLB.setType("dataCache");
+				this.dataTLB.setisTLB(true);
+				
+			}
+			if ( this.dataTLB!=null ) {
+				dataTLB.setLowerMemoryLevel(pageTable);
+				dataTLB.setUpperMemoryLevel(this);
+			}
+			if ( this.instructionTLB!=null) {
+				instructionTLB.setLowerMemoryLevel(pageTable);
+				instructionTLB.setUpperMemoryLevel(this);
+			}
+			
+			// disk
+			this.disk = new Disk(wordSize, blockSize, diskMemorySize, pageSize, ciclesPerAccess, 10);
+			
+			// instance of the pages
+			pageIn = new Page( this.pageSize, wordSize );
+			pageOut = new Page( this.pageSize, wordSize );
+			
+			// the amount of bits necessary to keep the physical Frame Address
+			this.physicalFrameAddressSize = (int) Math.ceil( Math.log( numberOfPages ) /  Math.log( 2 ) )  ;
+	
+			this.replacementAlgorithm = replacementAlgorithm;
+			controller = null;
+			printer = new Printer();
+		}
+		
+	}// end.
+	
+	/**
+	 * Gets the translation of the Virtual Page Number (VPN)
+	 * @param virtualPageNumber The virtual page number.
+	 * @return The physical page number.
+	 */
+	public Word translation(Word virtualPageNumber) {
+		Block physicalPageBlock = new Block(getBlockSize(),super.getWordSize());
+		
+		// 1 - verify if this is a valid page number.
+		if ( virtualPageNumber.getLongValue()> numberOfPages ) {
+			System.out.println("ERROR: Invalid page number " + virtualPageNumber.getLongValue() + ".");
+			return null;
+		}
+		
+		// 2 - retrieve the associated entry from the page table or any of the TLB.
+		if( dataTLB!=null ) {
+			// verify if we are in an instruction cicle and if we have an instruction TLB.
+			
+			if ( (!dataCycle) && instructionTLB!=null ){
+				
+				physicalPageBlock.setBlock(instructionTLB.start(virtualPageNumber));
+            }
+			else{ 
+				physicalPageBlock.setBlock(dataTLB.start(virtualPageNumber)); 
+				
+				}
+			}	
+		else{ 
+			physicalPageBlock.setBlock(pageTable.load(virtualPageNumber,1));
+		}
+
+		// stores the position of the page entry inside the block.
+		
+		int position = (int)  ( ( virtualPageNumber.getLongValue() + pageTable.getRegisterOffset() ) % getBlockSize());
+		// stores the page entry to be manipulated.
+		Word pageEntry = physicalPageBlock.getWord(position);
+		// the physical page number.
+		Word physicalPageNumber = new Word(super.getWordSize());
+		// mask to separate flags from physical frame.
+		long mask = ((1 << physicalFrameAddressSize) - 1);
+		
+
+		
+		// 3 - the page is in main memory?
+		if ( pageInMainMemory(pageEntry)) {
+			// 3.1.1 - remove flags.
+			physicalPageNumber.setWord(pageEntry.getLongValue() & mask);
+			
+		} else {//troca de páginas
+			
+			// 3.2.1 - load the page from the disk.
+			pageIn = disk.load(pageEntry.getLongValue());
+
+			// 3.2.2 - query for address.
+			
+			// stores the address where the page will be placed.
+			Word pageNewAddress = new Word(super.getWordSize());
+			
+			// stores the page entry of the page to be paged out.
+			Word pageOutEntry; 
+			
+			// page out position.
+			int	pageOutPosition; 
+			
+			// page out block
+			Block pageOutBlock = new Block(getBlockSize(),getWordSize());
+			
+			// stores the virtual address of the selected page.
+			Word pageOutAddress = new Word(super.getWordSize()); 
+			
+			// 3.2.3 - query the page to be paged out.
+			pageOutAddress.setWord(pageTable.getReplacementPosition());
+			
+			// 3.2.4 - query the page entry.
+			if( dataTLB!=null ) {
+				// verify if we are in an instruction cycle and if we have an instruction TLB.
+				if ( (!dataCycle) && instructionTLB!=null ){
+					
+					// if the data is in dataTLB and not in instructionTLB
+					if( !(instructionTLB.searchData(pageOutAddress) ) && (dataTLB.searchData(pageOutAddress))){	
+						
+						instructionTLB.start(pageOutAddress, dataTLB.start(pageOutAddress));
+						pageOutBlock.setBlock(instructionTLB.start(pageOutAddress));
+					}else{ // if data isn't in dataTLB
+						
+						pageOutBlock.setBlock(instructionTLB.start(pageOutAddress));
+					}
+					
+	            }else{
+	            	if(instructionTLB!=null){
+						// if the data is in instructionTLB and not in dataTLB 
+	            		if( !(dataTLB.searchData(pageOutAddress) ) && (instructionTLB.searchData(pageOutAddress))){
+	                		dataTLB.start(pageOutAddress, instructionTLB.start(pageOutAddress));
+	                		pageOutBlock.setBlock(dataTLB.start(pageOutAddress));
+	    				}else{// if data isn't in instructionTLB
+	    					pageOutBlock.setBlock(dataTLB.start(pageOutAddress));
+	    				}
+	            	}else{
+	            		pageOutBlock.setBlock(dataTLB.start(pageOutAddress));
+					}	
+				}
+			}else{ 
+				pageOutBlock.setBlock(pageTable.load(pageOutAddress,1));
+			}
+			
+			pageOutPosition = (int)pageOutAddress.getLongValue() % getBlockSize();
+			pageOutEntry = pageOutBlock.getWord(pageOutPosition);
+
+			
+			// 3.2.5 - get the physical page address.
+			pageNewAddress.setWord( (pageOutEntry.getLongValue() & mask) * getPageSize());
+
+			
+			// 3.2.6 - invalidate caches
+			control.invalidateCaches(pageNewAddress, pageSize);
+			
+			// 3.2.7 - prepare the page to be paged out.
+			pageOut = this.loadPageFromMainMemory(pageNewAddress);
+
+			
+			// 3.2.2.6 - page out.
+			Word diskAddress = new Word(super.getWordSize());
+			diskAddress.setWord(disk.store(pageOut));
+			
+			// making pageTable entry to the pageOut	
+			updateTable(pageOutAddress,diskAddress,pageOutBlock,pageOutPosition,false,false,false);
+			//}
+			
+			if (controller != null){
+				String location = String.format("Storing page into PageTable"); 
+				String addressString = String.format("\n%s", 
+						 printer.formatHexString(Long.toHexString(pageNewAddress.getLongValue())));
+				controller.pause("virtualmemory|"+location+"|address", addressString );
+			}
+
+			// 3.2.8 - store the page into main memory.
+			storePageInMainMemory(pageNewAddress,pageIn);
+			
+			// 3.2.9 - retrieve the frame.
+			physicalPageNumber.setWord(getPageNumber(pageNewAddress.getLongValue()) & mask);
+		}
+		
+		// 4 - updating page table block
+
+		/*if( dataTLB!=null ) {
+			// verify if we are in an instruction cycle and if we have an instruction TLB.
+			if ( (!dataCycle) && instructionTLB!=null ){
+				physicalPageBlock.setBlock(instructionTLB.start(virtualPageNumber));
+            }
+			else{ 
+				physicalPageBlock.setBlock(dataTLB.start(virtualPageNumber)); 
+            }
+		}else{ 
+			physicalPageBlock.setBlock(pageTable.load(virtualPageNumber,1));
+		}*/
+		//System.out.println("Physical Page Block 2");
+		//physicalPageBlock.getBlock().printBlock();
+		
+		// 5 - update table.
+		updateTable(virtualPageNumber,physicalPageNumber,physicalPageBlock,position,true,writeCycle,true);
+		//pageTable.print();
+		//System.out.println("instructionTLB ");
+		//instructionTLB.printContents();
+		//System.out.println("dataTLB ");
+		//dataTLB.printContents();
+		
+		
+		return physicalPageNumber;
+		
+	}// translation.
+	
+	// updateTable ************************************************************** */	
+	/**
+	 * Updates a memory object (TLB or Page Table).
+	 * @param address The logical page address.
+	 * @param data The physical page address.
+	 * @param frameBlock The block witch the frame resides at the page table.
+	 * @param wordIndex The index of the frame witch we must work.
+	 * @param referenced Was referenced? 
+	 * @param modified Modified (if we are in a instruction cicle, this will always evaluate to false)?
+	 * @param residence In main memory?
+	 * @return
+	 */
+	/* ************************************************************************** */	
+	private void updateTable(Word address, Word data, Block frameBlock, int wordIndex, boolean referenced, boolean modified, boolean residence) {
+		if ( dataTLB!=null ) {
+			if ( !dataCycle && instructionTLB!=null ){ 
+				updateTable(instructionTLB,address,data,frameBlock,wordIndex,referenced,false,residence);
+				// synchronizing the data TLB and instruction TLB if the block changed contains a page
+				// with instructions and data.
+				if (dataTLB.searchData(address)){
+					//updateTable(dataTLB,address,data,frameBlock,wordIndex,referenced,false,residence);
+					updateTable(dataTLB,address,data,dataTLB.start(address),wordIndex,referenced,false,residence);
+				}
+				
+			}else{ 
+				updateTable(dataTLB,address,data,frameBlock,wordIndex,referenced,modified,residence);
+				// synchronizing the data TLB and instruction TLB if the block changed contains a page
+				// with instructions and data.
+				if(instructionTLB!=null){
+					if (instructionTLB.searchData(address)){
+						//updateTable(instructionTLB,address,data,frameBlock,wordIndex,referenced,false,residence);
+						updateTable(instructionTLB,address,data,instructionTLB.start(address),wordIndex,referenced,false,residence);
+					}
+				}
+				
+			}	
+		}else  
+			updateTable(pageTable,address,data,frameBlock,wordIndex,referenced,modified,residence);
+	}// updateTable.
+	
+	// updateTable ************************************************************** */	
+	/**
+	 * Updates a memory object.
+	 * @param table The memory object to be update (TLB or Page Table).
+	 * @param address The logical page address.
+	 * @param data The physical page address.
+	 * @param frameBlock The block witch the frame resides at the page table.
+	 * @param wordIndex The index of the frame witch we must work.
+	 * @param referenced Was referenced? 
+	 * @param modified Modified?
+	 * @param residence In main memory?
+	 * @return
+	 */
+	/* ************************************************************************** */	
+	public void updateTable(Memory table, Word address, Word data, Block frameBlock, int wordIndex, boolean referenced, boolean modified, boolean residence) {
+		
+		//updateTable(pageOutAddress,pageNewAddress,pageOutBlock,pageOutPosition,false,writeCycle,false);	
+		
+		Word auxData = new Word(data.getWordSize());
+		auxData.setWord(data.getValue());
+		// setting the data flags 
+		makeStorableData(referenced, modified, residence, address, auxData);
+		frameBlock.setWord(auxData,wordIndex);
+		if ( table instanceof Cache ){ 
+			
+			((Cache)table).start(address,frameBlock);
+			
+		}
+		else 
+			table.store(address,frameBlock,1);
+
+	}// updateTable.
+	
+	// Load **************************************************************** */	
+	/**
+	 * Dummy load method. Inherited from the abstract class Memory.
+	 * @param
+	 * @return 
+	 */
+	/* ************************************************************************** */	
+	public Block load(Word address, int ispt) {
+		return null;
+	}
+	
+	// Load **************************************************************** */	
+	/**
+	 * Returns the translation of the Virtual Address
+	 * @param
+	 * @return 
+	 */
+	/* ************************************************************************** */	
+	public Block load(Word address, boolean instructionCycle, boolean writeCycle){
+		
+		Word w_physicalAddress = new Word(super.getWordSize());
+		Block physicalAddress = new Block(1, super.getWordSize());
+		Word physicalPageAddress = new Word(super.getWordSize());
+		
+		long aux; // keep the virtual page number
+		long aux2; // keep the physical frame number
+		long pageOffSet;
+		Word virtualPageNumber = new Word(super.getWordSize());
+		
+		// gets the virtual page number from the virtual address
+		virtualPageNumber.setWord(getPageNumber(address.getLongValue()));
+
+		// gets the page offset from the Virtual Address
+		aux = address.getLongValue();
+		// makes a mask to extract the page Offset from the address
+		long mask = 0x00;
+		for(int i = 0; i < (pageOffSetSize); i++)
+		{
+			mask = mask << 1;
+			mask = mask | 0x01;
+		}
+		// saves the page offset
+		pageOffSet = aux & mask;
+/* verifies if the virtual page number is allowed
+ * verifies if the page offSet is allowed
+ * verifies if the hole amount of virtual address are possible to be represented by the word of size wordSize */
+		if(( virtualPageNumber.getLongValue() <= numberOfPages ) && ( pageOffSet < pageSize ) && (pageOffSetSize + virtualPageNumberSize <= super.getWordSize()*8))		
+		{
+			
+			this.dataCycle = instructionCycle;
+			this.writeCycle = writeCycle;
+			
+			// physicalPageAddress receives the translation of the virtual page number (address)
+			physicalPageAddress.setWord(translation(virtualPageNumber).getValue());
+	
+			// verifies if the physical page address is allowed 											
+			if( (int) Math.ceil( Math.log( physicalPageAddress.getLongValue()+1 ) / Math.log( 2 ) ) <= (super.getWordSize()*8) - ( pageOffSetSize) ) 
+			{
+			
+				// aux2 receives the physical frame address (in the most significant bits) 
+				aux2 = physicalPageAddress.getLongValue();
+				aux2 = aux2 << (pageOffSetSize);
+				
+				// mounting the real address
+				aux2 = aux2 | pageOffSet;
+				w_physicalAddress.setWord(aux2);
+				physicalAddress.setWord(w_physicalAddress, 0);
+				
+				
+				return physicalAddress;
+			}
+			else
+			{
+				System.out.println("ERROR : physical frame Address not allowed");
+				return null;
+			}
+		}
+		else
+		{
+			System.out.println("ERROR : Virtual Address not allowed");
+			return null;
+		}
+		
+	}// end METHOD load
+	
+	/**
+	 * Returns the frame number of an address.
+	 * @param address The address.
+	 * @return The page number.
+	 */ 
+	public long getPageNumber(long address){
+		return address >>> pageOffSetSize;
+	}
+	
+//	 makeStorableData *****************************************************************/	
+	/**
+	 * Makes the data to be stored in the page table. This data consist of:
+	 *  REFERENCE BIT | MODIFICATION BIT | RESIDENCE BIT | PAGE ADDRESS
+	 * @param address Address of the frame to be stored.
+	 * @return 
+	 */
+	/****************************************************************************/	
+	public void makeStorableData( boolean reference , boolean modification, boolean inMainMemory, Word virtualPageNumber, Word address ){	
+		
+		long flags = 0x00;
+		long aux;
+		// if reference, flags 100;
+		if(reference) 
+			flags = flags | 0x04; // flags & 100 
+		// if reference, flags 100;
+		if(modification) 
+			flags = flags | 0x02; // flags & 010
+		// if reference, flags 100;
+		if(inMainMemory) 
+			flags = flags | 0x01; // flags & 001
+		
+		//updating flags in pageTable
+		pageTable.setFlags((int)virtualPageNumber.getLongValue(), (int)flags);
+		
+		// place the flags at the correct position.
+		flags = flags << physicalFrameAddressSize;
+		
+		// creates a mask to save the page offset
+		long mask = 0x00;
+		for(int i = 0; i < (physicalFrameAddressSize); i++){
+			
+			mask = mask << 1;
+			mask = mask | 0x01;
+		}
+		// saves the page offset.
+		aux = address.getLongValue() & mask;
+		
+		// place page offset and flags into the same word.
+		address.setWord( aux | flags );
+		
+	} // makeStorableData.
+	
+	
+//	 pageInMainMemory *****************************************************************/
+	/****************************************************************************/	
+	/**
+	 * Verifies the location of the page through the residence bit
+	 * @param data - the data that must have the location verified
+	 * @return If the page is in main memory return true, otherwise, false 
+	 */
+	/****************************************************************************/	
+	private boolean pageInMainMemory(Word data)
+	{
+		long residence = data.getLongValue() >>> physicalFrameAddressSize;
+		if( (residence & 0x01) == 0x01)
+			return true;
+		else
+			return false;
+	}
+
+//	 loadPageFromMainMemory *****************************************************/	
+	/**
+	 * This method loads a page from the main memory
+	 * @param
+	 * @return 
+	 */
+	/****************************************************************************/	
+	public Page loadPageFromMainMemory(Word address)
+	{
+		Word addr = new Word(address.getWordSize());
+		addr.setWord(address.getLongValue());
+		//System.out.println("Adrress loadPageFromMainMemory = " + addr.getLongValue());
+		
+		Page page = new Page(this.getPageSize(), this.getWordSize());
+		int blockSize = mainMemory.getBlockSize(); 
+		Block blockFromMainMemory = new Block(blockSize, this.getWordSize());
+		
+		// calculate the number of blocks to be loaded from the main memory
+		int numberOfBlocks = (int)Math.ceil(pageSize / blockSize);
+		// load the blocks and construct the page at the same time
+		for(int i = 0; i< numberOfBlocks; i++)
+		{
+			blockFromMainMemory = mainMemory.load(addr,0);
+			for(int j = 0; j< blockSize; j++)
+			{
+				// if the page is not full
+				if(j + (i * blockSize) < this.getPageSize())
+					page.store( j + (i * blockSize), blockFromMainMemory.getWord(j) );
+			}
+			addr.setWord(addr.getLongValue() + blockSize);
+		}
+		//page.printPage();
+		return page;
+	}// loadPageFromMainMemory
+	
+	/**
+	 * This method stores a page in the main memory
+	 * @param
+	 * @return 
+	 */
+	/****************************************************************************/	
+	public void storePageInMainMemory(Word address, Page pageToMainMemory)
+	{
+		int mainMemoryBlockSize = mainMemory.getBlockSize();
+		Word addressInMainMemory = new Word(super.getWordSize());
+		addressInMainMemory.setWord(address.getValue());
+		Block blockToMainMemory = new Block(mainMemoryBlockSize, this.getWordSize());
+		
+		for(int i = 0; i < Math.ceil((float)pageSize/(float)mainMemoryBlockSize); i++)
+		{
+			for(int j = 0; j < mainMemoryBlockSize; j++)
+			{
+				if(j + (i*mainMemoryBlockSize) < pageSize)
+					blockToMainMemory.setWord(pageIn.load(j + (i*mainMemoryBlockSize)), j);
+			}
+			mainMemory.store(addressInMainMemory, blockToMainMemory,1);
+			addressInMainMemory.setWord(addressInMainMemory.getLongValue() + mainMemoryBlockSize);
+		}
+	}// storePageInMainMemory.
+
+	/**
+	 * This method returns the page table object.
+	 * @return The Page Table object. 
+	 */
+	public PageTable getPageTable() {
+		return pageTable;
+	}// getPageTable.
+	
+	/**
+	 * This method returns the number of pages avaiable for the application on main memory.
+	 * @return Number of pages avaiable for the application on main memory. 
+	 */
+	public int getMainMemoryNumberOfPages() {
+		return getNumberOfPages() - numberOfDiskPages;
+	}// getMainMemoryNumberOfPages.
+	
+	/**
+	 * Saves the information about the last access to the virtual memory
+	 */
+	public void accessCompleted(){
+			
+	}// accessCompleted
+
+	/**
+	 * Returns the number of pages
+	 * @return number of pages 
+	 */
+	public int getNumberOfPages(){
+		return numberOfPages;
+	}// getNumberOfPages.
+
+	/**
+	 * Returns the page size
+	 * @return page Size
+	 */
+	public int getPageSize(){
+		return pageSize;
+	}// getPageSize.
+	
+	/**
+	 * Returns the number of bits used to represent the virtual page
+	 * @return virtual page number Size
+	 */
+	public int getVirtualPageNumberSize(){
+		return virtualPageNumberSize;
+	}// getVirtualPageNumberSize
+	
+	/**
+	 * Returns the number of bits used to represent the page offset
+	 * @return page off set size
+	 */
+	public int getPageOffSetSize(){
+		return pageOffSetSize;
+	}// getPageOffSetSize
+
+	/**
+	 * This method is here just because its implements an abstract class
+	 * @param
+	 * @return 
+	 */
+	/****************************************************************************/	
+	public void store(Word address, Block data, int ispt){
+	}
+	
+	public void writeAccessInfo(){	
+	}
+	
+	public long getRegisterOffset(){
+		return pageTable.getRegisterOffset();
+	}
+	
+	
+	/**
+	 * getDisk
+	 * @return returns the disk.
+	 */
+	public Disk getDisk(){
+		return disk;
+	}
+
+	/**
+	 * getAllDiskPagesContents
+	 * 
+	 * @return a string array with the contents of all disk pages
+	 */
+	public String[] getDiskContents(){
+		
+		return disk.getContents();
+		
+	}
+	
+	/**
+	 * getPageTableContent
+	 * 
+	 * @return a string array with the contents of the page table
+	 */
+	public String[] getPageTableContent(){
+		
+		return pageTable.getContents();
+		
+	}
+	
+	/**
+	 * getInstructionTlb
+	 * 
+	 * @return the instructionTLB if it exists, or null otherwise.
+	 */
+	public Cache getInstructionTlb(){
+		
+		if (instructionTLB != null){
+			return instructionTLB;
+		}else{
+			return null;
+		}
+		
+	}
+	
+	/**
+	 * getDataTlb
+	 * 
+	 * @return the dataTLB if it exists, or null otherwise.
+	 */
+	public Cache getDataTlb(){
+		
+		if (dataTLB != null){
+			return dataTLB;
+		}else{
+			return null;
+		}
+		
+	}
+	
+	/**
+	 * Set control object for communication engine-control.
+	 * @param AmnesiaControl control - control object
+	 */
+	public void setControl(AmnesiaControl control){ 
+		this.controller = control;
+	}
+}

@@ -1,0 +1,73 @@
+package cpu;
+import amnesiaCommons.*;
+
+/**
+ * 
+ * @author Jordan Herbert Santos
+ * 
+ * alterado em 11/10 por Jordan
+ * atualizado em 17/10 por Jordan
+ */
+
+public class Multiplexer extends OtherElements {
+	
+	private Word[] content;
+	private int size;
+	private int i;
+	/**
+	 * 
+	 * Constructor
+	 *
+	 */
+	public Multiplexer(int size){
+		
+		content = new Word[size];
+		for (i = 0; i < size; ++i)
+			content[i] = new Word(4);
+			
+		this.size = size;
+		
+	}
+	
+	/**
+	 *Method setData
+	 *
+	 */
+	public void setData(int position, Word data){
+	
+	    if (position < size){
+	    	if (data.isUnsigned()){
+	    		content[position].setWordUnsigned(data.getLongValue());
+	    	}else{
+	    		content[position].setWord(data.getLongValue());
+	    	}
+	    		
+	    }
+	    	
+	        
+	    //else tratar erro aqui???
+	}
+	
+	public void setData(int position, int data){
+		if (position < size)
+	        content[position].setWord(data);
+	}
+	
+	/**
+	 * Method getData
+	 *
+	 */
+	public Word getData(){
+		
+		return content[super.getControlSigns()];
+	}
+	
+	public void update(int controlSigns){
+		
+		
+		super.update(controlSigns);
+	}
+	
+
+	
+}

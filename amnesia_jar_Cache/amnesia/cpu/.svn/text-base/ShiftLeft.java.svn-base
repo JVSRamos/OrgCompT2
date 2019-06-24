@@ -1,0 +1,59 @@
+package cpu;
+import amnesiaCommons.*;
+
+/**
+ * 
+ * @author jordan
+ * alterado em 11/10 por Jordan
+ * atualizado em 17/10 por Jordan
+ */
+
+public class ShiftLeft extends OtherElements{
+	private Word content;
+	private long aux;
+	
+	public ShiftLeft(){
+		
+		content = new Word(4);
+		/*if it must only shift 2 bits, controlSigns will be always 
+		 *0 and the update method will never be called by the control unit
+		 */
+		super.update(0); 
+		
+	}
+
+	public void setData(int position, Word data){	
+	        content.setWord(data.getLongValue());
+	}
+	
+	public void setData(Word data){ 
+		setData(0, data);
+	}
+	
+	public void setData(int data){
+		content.setWord(data);
+	}
+	/**
+	 * Method getData
+	 *
+	 */
+	public Word getData(){
+		
+		if ( (super.getControlSigns() & 0x08000000) == 0 ){
+			// shift left 2
+			aux = content.getLongValue() << 2;
+			content.setWord( aux );
+			return content; 
+		}
+		else{ // shift left 16
+			aux = content.getLongValue() << 16;
+			content.setWord( aux );
+			return content;
+		}
+			
+	}
+	
+	public void update(int controlSigns){
+		super.update(controlSigns);
+	}
+}

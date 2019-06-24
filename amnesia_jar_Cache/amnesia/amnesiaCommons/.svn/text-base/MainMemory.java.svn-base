@@ -1,0 +1,265 @@
+/**
+ * 
+ */
+
+package amnesiaCommons;
+
+import control.AmnesiaControl;
+
+/**
+ * 
+ * @author Bruno Henrique Oliveira
+ */
+public class MainMemory extends Memory{
+
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	private Block contents[];
+	private AccessInfo accessInfo;
+	/* ************************************************************************ */
+	private AmnesiaControl control;
+	private Printer printer;
+	/* ************************************************************************ */
+	// CONSTRUCTOR
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for MainMemory
+	 * @param memorySize ( numer of blocks ), blockSize, wordSize
+	 */
+	/* ************************************************************************ */
+	public MainMemory( int memorySize, int blockSize, int wordSize, 
+			int ciclesPerAccess ){
+		
+		super(wordSize, blockSize, ciclesPerAccess, memorySize );
+		
+		// instanciate access info objetcs
+		accessInfo = new AccessInfo();
+	
+		// memorysize is in words, so we changed it to blocks
+		contents = new Block[(memorySize/blockSize)];
+
+		for (int i = 0; i < (memorySize/blockSize); ++i){
+			contents[i] = new Block( blockSize, wordSize );
+		}
+		
+		printer = new Printer();
+		
+	}// contructor
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 *	Method that sets all parameters in object accessInfo
+	 */
+	/* ************************************************************************ */
+	public void writeAccessInfo(){
+		
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that executes the load operation
+	 */
+	/* ************************************************************************ */
+	public Block start( Word address ){
+	
+		return load( address,0 );
+	}
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Method that executes the store operation
+	 */
+	/* ************************************************************************ */
+	public void start( Word address, Block data ){
+		store( address, data,0 );
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 *	Load Block from main memory
+	 *@param Address
+	 *@param ispt  says if we are doing a block load from the PT or the Main Memory
+	 *@return block
+	 *
+	 */
+	/* ************************************************************************ */
+	public Block load( Word address, int  ispt ){
+
+		// inc number of access
+		accessInfo.incTotalAccess();
+		
+		// number of bits representing word-> shift the address
+		int wordNumberOfBits = (int) ( Math.log( super.getBlockSize() ) / Math.log( 2 ) );
+		
+		// number of bits representing block -> separate block
+		int blockNumberOfBits = (int) ( (Math.log( super.getMemorySize() / super.getBlockSize()) )
+				/ Math.log( 2 ) );
+		
+		// get address stored in word object
+		long longAddress = address.getLongValue();
+		
+	if (control != null && ispt == 0){
+			
+			
+			String location = String.format("Loading data from Main Memory "); 
+			String addressString = String.format("\n%s",printer.formatHexString(Long.toHexString(longAddress))); 
+			control.pause("mainmemory|"+location+"|address", addressString );
+		
+		}	
+		
+		// set addressing mode from byte to word
+//		longAddress = longAddress >>> 2;
+		
+		// ignores all bits that references the word
+		longAddress = longAddress >>> wordNumberOfBits;
+		
+		// creates mask according to the number of bits that references block to separate block address
+		long mask = (long) Math.pow(2, blockNumberOfBits) - 1;
+		
+		// separate the bits that references the block
+		int position =  (int) ( longAddress & mask );
+		
+		
+		return contents[position];
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 *	abstract store method
+	 *@param Address, Data 
+	 */
+	/* ************************************************************************ */
+	public void store( Word address, Block data, int ispt ){
+
+		// inc number of access
+		accessInfo.incTotalAccess();
+		
+		// number of bits representing word-> shift the address
+		int wordNumberOfBits = (int) ( Math.log( super.getBlockSize() ) / Math.log( 2 ) );
+		
+		// number of bits representing block -> separate block
+		int blockNumberOfBits = (int) ( (Math.log( super.getMemorySize() / super.getBlockSize()) )
+				/ Math.log( 2 ) );
+		
+		// get address stored in word object
+		long longAddress = address.getLongValue();
+		
+		
+		// set addressing mode from byte to word
+//		longAddress = longAddress >>> 2;
+		
+		// ignores all bits that references the word
+		longAddress = longAddress >>> wordNumberOfBits;
+		
+		//		 creates mask according to the number of bits that references block to separate block address
+		long mask = (long) Math.pow(2, blockNumberOfBits) - 1;
+	
+		// separate the bits that references the block
+		int position =  (int) ( longAddress & mask );
+		
+		contents[position].setBlock(data);
+		
+		//if paused shows information
+		if (control != null && ispt == 0){
+			
+			
+			String location = String.format("Stored data in Main Memory "); 
+			String addressString = String.format("\n%s",printer.formatHexString(Long.toHexString(longAddress))); 
+			control.pause("mainmemory|"+location+"|address", addressString );
+		
+		}	
+	}
+	/* ************************************************************************ */
+    
+	/* ************************************************************************ */	
+	/**
+	 * Get number of CPU cicles spent in main memory
+	 * @return int - number of cpu cicles 
+	 */
+	/* ************************************************************************ */
+	public int getTotalCicles(){
+
+		return super.getCiclesPerAccess() * accessInfo.getTotalAccess();
+	}
+	/* ************************************************************************ */
+	
+
+	/* ************************************************************************ */	
+	/**
+	 * Get number of CPU cicles spent in main memory
+	 * @return int - number of main memory access 
+	 */
+	/* ************************************************************************ */
+	public int getNumberOfAccess(){
+
+		return accessInfo.getTotalAccess();
+	}
+	/* ************************************************************************ */
+
+	public void printContents(){
+
+            System.out.println("Main Memory Contents");
+            for (int i = 0; i < (super.getMemorySize()/getBlockSize()); ++i){
+                for(int j = 0; j < super.getBlockSize(); ++j){
+
+                    System.out.print(" POS[" + ((i*super.getBlockSize())+j) + "] " + contents[i].getWord(j).getLongValue() + " ");
+
+                }
+                System.out.println();
+            }
+        }
+        
+	public void printContents(int position){
+		
+		System.out.println("Main Memory Contents");
+        for (int i = position/(super.getBlockSize()); i < (super.getMemorySize()/getBlockSize()); ++i){
+            for(int j = 0; j < super.getBlockSize(); ++j){
+
+                System.out.print(" POS[" + ((i*super.getBlockSize())+j) + "] " + contents[i].getWord(j).getLongValue() + " ");
+
+            }
+            System.out.println();
+        }
+    }
+	
+	public String[] getContents(int initialAddress){
+		
+		String[] contents = new String[super.getMemorySize() - initialAddress + 1];
+		
+		// the first position is the initial
+		contents[super.getMemorySize() - initialAddress] = Integer.toString(initialAddress);
+		
+		for (int i = initialAddress/(super.getBlockSize()); i < (super.getMemorySize()/getBlockSize()); ++i){
+            for(int j = 0; j < super.getBlockSize(); ++j){
+            	contents[((i*super.getBlockSize())+j) - initialAddress] = Long.toString(this.contents[i].getWord(j).getLongValue());
+            }
+		}
+		return contents;
+		
+	}
+    
+	/**
+	 * Set control object for communication engine-control.
+	 * @param AmnesiaControl control - control object
+	 */
+	public void setControl(AmnesiaControl control){ 
+		this.control = control;
+	}  
+        
+        
+        
+}
+
+
+
+
+
+

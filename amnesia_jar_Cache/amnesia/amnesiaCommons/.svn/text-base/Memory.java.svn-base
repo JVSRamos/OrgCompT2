@@ -1,0 +1,111 @@
+package amnesiaCommons;
+
+
+/**
+ * 
+ * @author Bruno Henrique Oliveira e Guilherme Rodrigues Buzo
+ * Alterada em 04/09/07 por Bruno e Guilherme
+ *
+ */
+public abstract class Memory {
+
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	private int wordSize;
+	private int blockSize;
+	private int memorySize;
+	private int ciclesPerAccess;
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */
+	// CONSTRUCTOR
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for Memory
+	 * @param wordSize, blockSize, ciclesPerAccess, memorySize, accessInfoObj
+	 */
+	/* ************************************************************************ */
+	public Memory( int wordSize, int blockSize, int ciclesPerAccess, int memorySize ){
+		
+		this.wordSize = wordSize;
+		this.blockSize = blockSize;
+		this.ciclesPerAccess = ciclesPerAccess;
+		this.memorySize = memorySize;		
+		
+	}// contructor
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 *	Method that sets all parameters in object accessInfo
+	 *  All objects implements this class in a unique way 
+	 */
+	/* ************************************************************************ */
+	public abstract void writeAccessInfo();	
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 *	abstract load method 
+	 */
+	/* ************************************************************************ */
+	public abstract Block load( Word address, int ispt );	
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 *	abstract store method 
+	 */
+	/* ************************************************************************ */
+	public abstract void store( Word address, Block data, int ispt );	
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 *  Returns word size
+	 *	@return wordSize 
+	 */
+	/* ************************************************************************ */
+	public int getWordSize( ){
+		return wordSize;
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 *  Returns block size
+	 *	@return blockSize 
+	 */
+	/* ************************************************************************ */
+	public int getBlockSize(){
+		return blockSize;
+	}
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 *  Returns number of cicles per access
+	 *	@return ciclesPerAccess 
+	 */
+	/* ************************************************************************ */
+	public int getCiclesPerAccess(){
+		return ciclesPerAccess;
+	}
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 *  Returns memory size
+	 *	@return memorySize 
+	 */
+	/* ************************************************************************ */
+	public int getMemorySize(){
+		return memorySize;
+	}
+	/* ************************************************************************ */
+	
+}// class memory

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="WINDOWS-1252" standalone="no"?>
+<jardesc>
+    <jar path="C:/Users/Fernando/Desktop/amnesia.jar"/>
+    <options buildIfNeeded="true" compress="true" descriptionLocation="/AmnesiaTeste/amnesiajar.jardesc" exportErrors="true" exportWarnings="true" includeDirectoryEntries="false" overwrite="false" saveDescription="true" storeRefactorings="false" useSourceFolders="false"/>
+    <storedRefactorings deprecationInfo="true" structuralOnly="false"/>
+    <selectedProjects/>
+    <manifest generateManifest="true" mainClassHandleIdentifier="=AmnesiaTeste/src&lt;{Amnesia.java[Amnesia" manifestLocation="" manifestVersion="1.0" reuseManifest="false" saveManifest="false" usesManifest="true">
+        <sealing sealJar="false">
+            <packagesToSeal/>
+            <packagesToUnSeal/>
+        </sealing>
+    </manifest>
+    <selectedElements exportClassFiles="true" exportJavaFiles="false" exportOutputFolder="false">
+        <file path="/AmnesiaTeste/somador.txt"/>
+        <file path="/AmnesiaTeste/memoria.txt"/>
+        <file path="/AmnesiaTeste/trace9.din"/>
+        <file path="/AmnesiaTeste/binario_for.txt"/>
+        <folder path="/AmnesiaTeste/doc/textInterface"/>
+        <file path="/AmnesiaTeste/ta3.xml"/>
+        <file path="/AmnesiaTeste/address.din"/>
+        <folder path="/AmnesiaTeste/Tutorial"/>
+        <file path="/AmnesiaTeste/binario_tak.txt"/>
+        <file path="/AmnesiaTeste/doc/serialized-form.html"/>
+        <file path="/AmnesiaTeste/for.txt"/>
+        <file path="/AmnesiaTeste/saida.txt"/>
+        <file path="/AmnesiaTeste/binario_for5.din"/>
+        <file path="/AmnesiaTeste/_SomaSimplesB.txt"/>
+        <folder path="/AmnesiaTeste/Configuration"/>
+        <file path="/AmnesiaTeste/binario3.xml"/>
+        <file path="/AmnesiaTeste/binario7.xml"/>
+        <file path="/AmnesiaTeste/estatos.txt"/>
+        <file path="/AmnesiaTeste/doc/package-list"/>
+        <file path="/AmnesiaTeste/trace4.xml"/>
+        <file path="/AmnesiaTeste/binario_fatorial_recursivo.din"/>
+        <folder path="/AmnesiaTeste/doc/cpu"/>
+        <file path="/AmnesiaTeste/binario_multiplicacao.txt"/>
+        <file path="/AmnesiaTeste/binario_fatorial_nao_rec.txt"/>
+        <file path="/AmnesiaTeste/doc/overview-summary.html"/>
+        <file path="/AmnesiaTeste/binario2.xml"/>
+        <file path="/AmnesiaTeste/ta2.xml"/>
+        <file path="/AmnesiaTeste/mmmodel.xml"/>
+        <file path="/AmnesiaTeste/Trace File.din"/>
+        <file path="/AmnesiaTeste/_MapeamentoDireto.xml"/>
+        <file path="/AmnesiaTeste/b.din"/>
+        <file path="/AmnesiaTeste/doc/stylesheet.css"/>
+        <file path="/AmnesiaTeste/binario_somador.txt"/>
+        <file path="/AmnesiaTeste/.classpath"/>
+        <folder path="/AmnesiaTeste/doc/configuration"/>
+        <file path="/AmnesiaTeste/c.txt"/>
+        <folder path="/AmnesiaTeste/doc/index-files"/>
+        <file path="/AmnesiaTeste/trace6.xml"/>
+        <javaElement handleIdentifier="=AmnesiaTeste/src"/>
+        <file path="/AmnesiaTeste/binario_for.din"/>
+        <file path="/AmnesiaTeste/doc/package-use.html"/>
+        <file path="/AmnesiaTeste/percorrepaulo.txt"/>
+        <folder path="/AmnesiaTeste/doc/resources"/>
+        <file path="/AmnesiaTeste/b4.txt"/>
+        <file path="/AmnesiaTeste/binario8.xml"/>
+        <file path="/AmnesiaTeste/binario_memoria.txt"/>
+        <file path="/AmnesiaTeste/doc/Amnesia.png"/>
+        <file path="/AmnesiaTeste/erro1.xml"/>
+        <file path="/AmnesiaTeste/trace7.xml"/>
+        <file path="/AmnesiaTeste/doc/overview-tree.html"/>
+        <folder path="/AmnesiaTeste/doc/amnesiaCommons"/>
+        <file path="/AmnesiaTeste/binario1.xml"/>
+        <file path="/AmnesiaTeste/c.din"/>
+        <folder path="/AmnesiaTeste/doc/cache"/>
+        <file path="/AmnesiaTeste/binario_bubble_sort.bin"/>
+        <file path="/AmnesiaTeste/doc/package-summary.html"/>
+        <file path="/AmnesiaTeste/c3.txt"/>
+        <file path="/AmnesiaTeste/binario_comandos.txt"/>
+        <file path="/AmnesiaTeste/trace1.xml"/>
+        <file path="/AmnesiaTeste/doc/index.html"/>
+        <file path="/AmnesiaTeste/trace2.xml"/>
+        <file path="/AmnesiaTeste/doc/package-summary.png"/>
+        <file path="/AmnesiaTeste/doc/allclasses-noframe.html"/>
+        <file path="/AmnesiaTeste/binario_primos.txt"/>
+        <file path="/AmnesiaTeste/binario4.xml"/>
+        <file path="/AmnesiaTeste/b.txt"/>
+        <file path="/AmnesiaTeste/think_aloud2.xml"/>
+        <folder path="/AmnesiaTeste/lib"/>
+        <file path="/AmnesiaTeste/binario_fatorial_recursivo.txt"/>
+        <file path="/AmnesiaTeste/doc/overview-frame.html"/>
+        <file path="/AmnesiaTeste/binario_percorre.txt"/>
+        <file path="/AmnesiaTeste/doc/Amnesia.html"/>
+        <file path="/AmnesiaTeste/err.txt"/>
+        <file path="/AmnesiaTeste/doc/package-frame.html"/>
+        <file path="/AmnesiaTeste/binario5.xml"/>
+        <file path="/AmnesiaTeste/ta1.xml"/>
+        <file path="/AmnesiaTeste/doc/package-tree.html"/>
+        <file path="/AmnesiaTeste/doc/constant-values.html"/>
+        <file path="/AmnesiaTeste/sh.xml"/>
+        <folder path="/AmnesiaTeste/doc/control"/>
+        <file path="/AmnesiaTeste/comados.txt"/>
+        <file path="/AmnesiaTeste/trace5.xml"/>
+        <file path="/AmnesiaTeste/_rastroleitura.din"/>
+        <file path="/AmnesiaTeste/teste.xml"/>
+        <file path="/AmnesiaTeste/trace9.xml"/>
+        <file path="/AmnesiaTeste/binario_somador.din"/>
+        <file path="/AmnesiaTeste/trace8.xml"/>
+        <file path="/AmnesiaTeste/binario_comandos.din"/>
+        <folder path="/AmnesiaTeste/doc/virtualMemory"/>
+        <file path="/AmnesiaTeste/binario_bubble_sort.txt"/>
+        <file path="/AmnesiaTeste/binario6.xml"/>
+        <file path="/AmnesiaTeste/e.txt"/>
+        <file path="/AmnesiaTeste/.project"/>
+        <file path="/AmnesiaTeste/doc/deprecated-list.html"/>
+        <file path="/AmnesiaTeste/address1.din"/>
+        <file path="/AmnesiaTeste/binario_memoria.din"/>
+        <folder path="/AmnesiaTeste/doc/class-use"/>
+        <file path="/AmnesiaTeste/doc/help-doc.html"/>
+        <file path="/AmnesiaTeste/log.txt"/>
+        <file path="/AmnesiaTeste/inferno.xml"/>
+        <file path="/AmnesiaTeste/doc/allclasses-frame.html"/>
+        <folder path="/AmnesiaTeste/doc/guiInterface"/>
+        <file path="/AmnesiaTeste/doc/index-all.html"/>
+        <file path="/AmnesiaTeste/think_aloud.xml"/>
+        <file path="/AmnesiaTeste/trace3.xml"/>
+    </selectedElements>
+</jardesc>

@@ -1,0 +1,1046 @@
+package configuration;
+
+import control.*;
+
+import java.io.File;
+import org.w3c.dom.Document;
+import org.w3c.dom.*;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.DocumentBuilder;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException; 
+
+import java.util.LinkedList;
+import amnesiaCommons.*;
+import cache.*;
+import cpu.*;
+import virtualMemory.*;
+
+/**
+ * 
+ * @author Bruno Henrique Oliveira 
+ * Instanciantes the 'engine' of amnesia and provides a control
+ * object to this engine
+ *
+ */
+
+public class AmnesiaConfiguration{
+
+        /* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+        private boolean splittedCache;
+        private boolean cacheExists;
+        private boolean virtualMemoryExists;
+        private LinkedList<Cache> cacheObjects;
+        private AmnesiaControl control;
+        private Printer printer;
+        private MainMemory mainMemory;
+        private boolean virtualMemoryError;
+        /* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */
+	// CONSTRUCTORS
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+         * No parameters Contructor
+	 */
+	/* ************************************************************************ */
+        public AmnesiaConfiguration( Printer printer){
+            this.printer = printer;
+        
+            cacheObjects = new LinkedList<Cache>();
+            // instanciate control
+            control = new AmnesiaControl(printer);
+            splittedCache = true;
+            cacheExists = false;
+            virtualMemoryExists = false;
+            virtualMemoryError = false;
+        }
+	/* ************************************************************************ */
+
+        
+        /* ************************************************************************ */
+	// METHODS
+	/* ************************************************************************ */
+
+        /* ************************************************************************ */	
+	/**
+	 *  Sets all amnesia engine configuration 
+	 *  @param configurationFileName 
+         *  @return controlObject
+	 */
+	/* ************************************************************************ */
+	public AmnesiaControl configure( String fileName ){
+
+            ValidateAmnesiaConfiguration validator = new ValidateAmnesiaConfiguration(printer);
+            
+            try{
+                // check if xml is valid
+                if( validator.validateConfiguration(fileName) == false ){
+                	control.closeConection();
+                	
+                	return null;
+                }
+                
+            }catch(Exception exception){
+            	
+                printer.setError(exception.getMessage());                
+                control.closeConection();
+                return null;
+            }
+                     
+            try{
+                // Instanciate DOM for configuration file
+                DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
+                DocumentBuilder docBuilder = docBuilderFactory.newDocumentBuilder();
+                Document doc = docBuilder.parse( new File( fileName ) );
+
+                // normalize text representation
+                doc.getDocumentElement().normalize();
+
+                if( doc.getDocumentElement().getNodeName().compareTo("AmnesiaConfiguration") != 0){
+                    printer.setError("Not an Amnesia configuration file");
+                    control.closeConection();
+                    return null;
+                }
+
+                // Read CPU setings
+                NodeList cpuSetings = doc.getElementsByTagName("CPU");
+                MemoryControl memoryController = instanciateCPU(cpuSetings);
+
+                // checking error instanciating cpu
+                if(memoryController == null){
+                	control.closeConection();
+                	return null;
+                }
+
+                int wordSize = memoryController.getWordSize(); 
+
+                // Read MP settings
+                NodeList mainMemorySetings = doc.getElementsByTagName("MainMemory");
+                mainMemory = instanciateMainMemory(mainMemorySetings, wordSize);
+                
+                // checking error instanciating main memory                
+                if(mainMemory == null){
+                	control.closeConection();
+                	return null;
+                }
+                
+                // Read CACHE setings
+                // get all caches configuration elements
+                NodeList listOfCaches = doc.getElementsByTagName("Cache");
+                if( buildCacheHierarchy( listOfCaches, wordSize) == false){
+                	control.closeConection();
+                	return null;
+                }
+                
+                
+                // Read VM setings
+                NodeList virtualMemorySetings = doc.getElementsByTagName("VirtualMemory");
+                VirtualMemory virtualMemory = instanciateVirtualMemory( virtualMemorySetings);
+                
+                // checking error instanciating virtual memory
+                if(virtualMemoryError){
+                	control.closeConection();
+                	return null;
+                }
+
+                // link memory hierarchy elements
+                linkMemoryHierarchy(mainMemory, memoryController, virtualMemory); 
+
+                if(!memoryHierarchyIsValid(virtualMemory, memoryController)){
+                	control.closeConection();
+                    return null; 
+                }
+
+            // This exceptions need to be catch because of SAX Classes
+            // they were just adapted for amnesia exceptions
+            }catch (SAXParseException exception) {
+                String errorMessage = String.format("%s %d %s %s: %s", "Parsing error at line ", exception.getLineNumber(),", uri", 
+                        exception.getSystemId (), exception.getMessage() );
+                printer.setError(errorMessage);
+                control.closeConection();
+                return null;
+            }catch(NumberFormatException err){
+                printer.setError( "Configuration Exception, check for numbers in config file" );
+                control.closeConection();
+                return null;
+            }catch (SAXException exception) {
+                printer.setError("Unknown parse error, please check configuration file");
+                control.closeConection();
+                return null;
+            }catch(Exception exception){
+            	printer.setError("Check for empty spaces in configuration file.");
+                control.closeConection();
+            }catch (Throwable throwable) {
+                printer.setError("Please check configuration file");
+                control.closeConection();
+                return null;
+            }
+
+            printer.setDataOut("Configuration file ..............................................................OK");
+        
+            return control;
+        }
+	/* ************************************************************************ */
+    
+        /* ************************************************************************ */	
+	/**
+         *  read XML file and instanciate cpu objects according to it
+	 *  @param NodeList cpuSetings, accessInfoObject
+         *  @return MemoryControllerObject
+	 */
+	/* ************************************************************************ */
+	private MemoryControl instanciateCPU( NodeList cpuSetings )
+            throws SAXParseException, SAXException, Throwable{
+            
+            
+            int numberOfCPUs = cpuSetings.getLength();
+
+            MemoryControl memoryController;
+
+            if(numberOfCPUs != 1){
+            	
+            	printer.setError("There is none or more than one CPU in configuration file");                
+            	return null;
+            }else{
+                Node cpuNode = cpuSetings.item(0);
+
+                // reads declared word size
+                int wordSize = Integer.parseInt( readTag( cpuNode, "wordSize" ) );
+                
+                // instanciate CPUMain Object
+                CPUMain cpuMain = new CPUMain();
+                // get memory control 
+                memoryController = cpuMain.getMemoryControl();
+
+                // check if declared word size is compatible with instanciated cpu
+                if( wordSize != memoryController.getWordSize() ){
+                	printer.setError( "Declared word size is not compatible with the CPU, " +
+                			"expected"+  memoryController.getWordSize() + " but " + wordSize + " was found.");
+                	return null;                	
+                }
+                
+                // add CPU Objects in control object
+                control.addCPUMain(cpuMain);
+            }
+
+               
+            return memoryController;
+
+        }
+        /* ************************************************************************ */
+     
+        /* ************************************************************************ */	
+	/**
+         *  read XML file and instanciate main memory objects according to it
+	 *  @param NodeList mainMemorySetings, wordsize and accessInfoObject
+         *  @return MainMemoryObject
+	 */
+	/* ************************************************************************ */
+	private MainMemory instanciateMainMemory(NodeList mainMemorySetings, int wordSize )
+            throws SAXParseException, SAXException, Throwable{
+        
+            int numberOfMPs = mainMemorySetings.getLength();
+
+            MainMemory mainMemory = null;
+            if(numberOfMPs != 1){
+            	printer.setError( "There is none or more than one main memory in configuration file");
+            }else{
+                Node mpNode = mainMemorySetings.item(0);
+                
+                // get blockSize node
+                int blockSize = Integer.parseInt( readTag( mpNode, "blockSize" ) );
+
+                // get memorySize node
+                int memorySize = Integer.parseInt( readTag( mpNode, "memorySize" ) );
+                
+                if( (memorySize%blockSize) != 0 || (memorySize < blockSize) ){
+                	printer.setError( "Main memory size must be greater and multiple than it's own block size");
+                	return null;
+                }
+                
+                // get ciclesPerAccess node
+                int ciclesPerAccess = Integer.parseInt( readTag( mpNode, "ciclesPerAccess" ) );
+
+                // instanciate main memory object
+                mainMemory = new MainMemory(memorySize, blockSize, wordSize, ciclesPerAccess );
+
+            }
+
+
+            control.addMainMemory(mainMemory);
+
+            
+            return mainMemory;
+            
+        }
+        /* ************************************************************************ */   
+    
+        /* ************************************************************************ */	
+	/**
+         *  read XML file and instanciate virtual memory object according to it
+	 *  @param NodeList virtualMemorySetings, wordsize and accessInfoObject
+         *  @return VirtualMemoryObject
+	 */
+	/* ************************************************************************ */
+	private VirtualMemory instanciateVirtualMemory(NodeList virtualMemorySetings )
+            throws SAXParseException, SAXException, Throwable{
+        
+            // number of virtual memory nodes
+            int numberOfVM = virtualMemorySetings.getLength();
+            
+            // virtual memory object
+            VirtualMemory virtualMemory = null;
+
+            // TLB objects
+            Cache dataTLBObject = null;
+            Cache instructionTLBObject = null;
+            
+            if(numberOfVM > 1){
+            	virtualMemoryError = true;
+            	printer.setError("There is more than one virtual memory in configuration file");
+            	
+            	return null;
+            }else{
+                //check virtual memory existence
+            	
+                if(numberOfVM == 1){
+                		        
+                    // set virtual memory exitence flag true
+                    virtualMemoryExists = true;
+
+                    // virtual memory node contents
+                    Node vmNode = virtualMemorySetings.item(0);
+                    
+                    // get pageSize node
+                    int pageSize = Integer.parseInt( readTag( vmNode, "pageSize" ) );
+                    
+                    // checking valid page size
+                    if( (pageSize% mainMemory.getBlockSize()) != 0 || (pageSize < mainMemory.getBlockSize()) ){
+                    	virtualMemoryError = true;
+                    	printer.setError("Disk size must be greater and multiple of the page size");
+                    	return null;
+                    }
+                    
+                    // get diskMemorySize node
+                    int diskMemorySize = Integer.parseInt( readTag( vmNode, "diskMemorySize" ) );
+                                          
+                    // checking valid disk size
+                    if( (diskMemorySize% pageSize) != 0 || (diskMemorySize < pageSize) ){
+                    	virtualMemoryError = true;
+                    	printer.setError( "Disk size must be greater and multiple of the page size");
+                    	return null;
+                    }
+                    
+                    // get diskMultiplicationFactor node
+                    int diskMultFactor = Integer.parseInt( readTag( vmNode, "diskMultiplicationFactor" ) );
+                    
+                    // get ciclesPerAccess node
+                    int diskCiclesPerAccess = Integer.parseInt( readTag( vmNode, "diskCiclesPerAccess" ) );
+                    
+                    // get replacementAlgorithm node
+                    String replacementAlgorithmString = readTag( vmNode, "pageTableReplacementAlgorithm" );
+                    
+                    int replacementAlgorithm = verifyPageTableReplacementAlgorithm(replacementAlgorithmString);
+                    
+                    // checking mapping function and replacement algorithm
+                    if( replacementAlgorithm == -1 ){
+                    	virtualMemoryError = true;
+                    	printer.setError( "Page table replacement algorithm is neither LRU nor NRU");
+                    	return null;
+                    }
+
+
+                    // get element            
+                    Element element = (Element) vmNode;
+                   
+                    // get TLB type or existence
+                    String TLBType = readTag(vmNode, "TLBType");
+                    
+                    
+                    TLBType = TLBType.toUpperCase();
+
+                    if( TLBType.compareTo("UNIFIED") == 0 ){
+                                    
+                        // separate unifiedTLB node in VirtualMemory tag
+                        NodeList nodeList = element.getElementsByTagName( "unifiedTLB" );
+
+                        // separate first node
+                        Element firstElement = ( Element ) nodeList.item(0);
+
+                        Node TLBNode = (Node) firstElement;
+
+                        // instaciate TLB 
+                        dataTLBObject = instanciateTLB(TLBNode, TLBType );
+
+                        if(dataTLBObject == null){
+                        	virtualMemoryError = true;
+                        	return null;
+                        }
+
+                    }else{
+                        if( ( TLBType.compareTo("SPLITTED") == 0 ) ) {
+                        	//////// get data tlb configuration
+
+                            // separate unifiedCache nodes in virtual memory tag
+                            NodeList nodeList = element.getElementsByTagName( "dataTLB" );
+
+                            // separate first node
+                            Element firstElement = ( Element ) nodeList.item(0);
+
+                            Node TLBNode = (Node) firstElement;
+
+                            dataTLBObject = instanciateTLB(TLBNode, "dataTLB" );
+
+                            if(dataTLBObject == null){
+                            	virtualMemoryError = true;
+                            	return null;
+                            }
+                            //////// get instruction tlb configuration
+
+                            // separate splitted TLB nodes in virtual memory tag
+                            nodeList = element.getElementsByTagName( "instructionTLB" );
+
+                            // separate first node
+                            firstElement = ( Element ) nodeList.item(0);
+
+                            TLBNode = (Node) firstElement;
+
+                            instructionTLBObject = instanciateTLB(TLBNode, "intructionTLB" );
+                            
+                            if(instructionTLBObject == null){
+                            	virtualMemoryError = true;
+                            	return null;
+                            }
+
+                        }else{
+                        	// check if there is no TLB configured
+                        	if( ( TLBType.compareTo("NONE") != 0 ) ) {
+                        		virtualMemoryError = true;
+                        		printer.setError( "Unknown TLB type, not unified neither splitted nor none value found");
+                        		return null;
+                        	}
+                        }
+
+                    
+                    }
+
+                    // instanciate virtual memory object
+                    virtualMemory = new VirtualMemory( pageSize, mainMemory.getWordSize(), mainMemory.getBlockSize(),
+                    		diskCiclesPerAccess, diskMemorySize, diskMultFactor,mainMemory, replacementAlgorithm, 
+                    		dataTLBObject, instructionTLBObject, control);
+                    
+                    // seting the SP register if virtual memory exists
+                    CPUMain cpuMain = control.getCPUMain();
+                    cpuMain.setSP( (int) ( virtualMemory.getPageTable().getRegisterOffset() - 1 + virtualMemory.getDisk().getMemorySize()) 
+                    		<< (int)( Math.log(cpuMain.getMemoryControl().getWordSize())/Math.log(2) ) );
+                
+                }else{ // if numberOfVM == 0
+                    // seting the SP register if virtual memory doesn�t exist
+                    CPUMain cpuMain = control.getCPUMain();
+                    cpuMain.setSP((int)(mainMemory.getMemorySize() - 1) << (int)( Math.log(cpuMain.getMemoryControl().getWordSize())/Math.log(2) ) );
+                    
+                		
+                }
+                // cpu
+            }
+
+
+            control.addVirtualMemory(virtualMemory);
+           
+            
+            return virtualMemory;
+            
+        }
+        /* ************************************************************************ */   
+
+        
+        /* ************************************************************************ */	
+	/**
+         *  read XML file and instanciate cache objects according to it
+	 *  @param NodeList listOfCaches 
+	 */
+	/* ************************************************************************ */
+	private boolean buildCacheHierarchy( NodeList listOfCaches, int wordSize )
+            throws SAXParseException, SAXException, Throwable{
+            
+            // total number of caches
+            int totalOfCaches = listOfCaches.getLength();
+
+            // check if exists caches in configuration file
+            if(totalOfCaches >= 1){
+                cacheExists = true;
+            }
+
+            // instanciate all caches and 
+            for(int i = 0; i < totalOfCaches; ++i){
+
+                // Load a cache configuration
+                Node node = listOfCaches.item(i);
+
+                // get cache type
+                String cacheType = readTag(node, "cacheType");
+
+                // Set string to upper case for later comparison
+                cacheType = cacheType.toUpperCase();
+
+                // get element
+                Element element = (Element) node;
+                
+                
+                if( cacheType.compareTo("UNIFIED") == 0 ){
+                
+                    // after a unified cache is instanciated, no splitted caches can be created
+                    splittedCache = false;
+
+                    // separate unifiedCache nodes in cache tag
+                    NodeList nodeList = element.getElementsByTagName( "unifiedCache" );
+
+                    // separate first node
+                    Element firstElement = ( Element ) nodeList.item(0);
+
+                    Node cacheNode = (Node) firstElement;
+
+                    Cache unifiedCacheObject = instanciateCache(cacheNode, cacheType, wordSize );
+                
+                    // checking for erros
+                    if(unifiedCacheObject == null){
+                    	return false;
+                    }
+                    
+                    // insert cache object into a linked list of caches
+                    cacheObjects.add( unifiedCacheObject);
+                
+                    // add a the cache in control object for interface issues
+                    control.addCache( unifiedCacheObject );
+
+                }else{
+                	
+                    if( ( cacheType.compareTo("SPLITTED") == 0 ) && ( splittedCache ) ) {
+    
+                        //////// get data cache configuration
+                    	
+                        // separate unifiedCache nodes in cache tag
+                        NodeList nodeList = element.getElementsByTagName( "dataCache" );
+
+                        // separate first node
+                        Element firstElement = ( Element ) nodeList.item(0);
+
+                        Node cacheNode = (Node) firstElement;
+
+                        Cache dataCacheObject = instanciateCache(cacheNode, "dataCache", wordSize );
+                      
+                        // checking for errors
+                        if(dataCacheObject == null){
+                        	return false;
+                        }
+                        
+                        // insert cache object into a linked list of caches
+                        cacheObjects.add( dataCacheObject );
+                              
+                        // add a the cache in control object for interface issues
+                        control.addCache( dataCacheObject );
+                              
+                        //////// get instruction cache configuration
+                  
+                        // separate unifiedCache nodes in cache tag
+                        nodeList = element.getElementsByTagName( "instructionCache" );
+                        
+
+                        // separate first node
+                        firstElement = ( Element ) nodeList.item(0);
+
+                        cacheNode = (Node) firstElement;
+
+                        Cache instructionCacheObject = instanciateCache(cacheNode, "instructionCache", wordSize );
+                        
+                        // checking for errors
+                        if(instructionCacheObject == null){
+                        	return false;
+                        }
+                        
+                        // insert cache object into a linked list of caches
+                        cacheObjects.add( instructionCacheObject);
+
+                        // add a the cache in control object for interface issues
+                        control.addCache( instructionCacheObject );
+
+                    }else{
+                    	printer.setError( "Unknown cache type, not unified neither splitted");
+                    	return false;
+                    }
+                }
+            }
+            return true;
+        }
+        /* ************************************************************************ */
+
+    
+        /* ************************************************************************ */	
+	/**
+	 *  Read tag contents, return a string with the contens or return null case
+         *  data is invalid
+	 *  @param Node cacheNome, String tagName 
+         *  @return String tagContent
+	 */
+	/* ************************************************************************ */
+        private String readTag( Node node, String tagName ) 
+            throws SAXParseException, SAXException, Throwable{
+
+            Element element = (Element) node;
+
+            // separate tagName nodes in cache tag
+            NodeList nodeList = element.getElementsByTagName( tagName );
+
+            // separate only cache id node
+            Element listElement = ( Element ) nodeList.item(0);
+
+            // get child nodes ( in this case id_cache text in xml file )
+            NodeList textList = listElement.getChildNodes();
+            
+            return ( (Node)textList.item( 0 ) ).getNodeValue().trim();
+        }
+	/* ************************************************************************ */
+
+        /* ************************************************************************ */	
+	/**
+	 *  @param String writePolicy 
+         *  @return int writePolicyCode
+	 */
+	/* ************************************************************************ */
+        private int verifyWritePolicy( String writePolicy ){ 
+        
+            writePolicy = writePolicy.toUpperCase();
+
+            if(writePolicy.compareTo("WRITEBACK") == 0){
+                return 0;
+            }
+            
+            if(writePolicy.compareTo("WRITETHROUGH") == 0){
+                return 1;
+            }
+
+            // if returns -1 then error
+            return -1;
+            
+        }
+	/* ************************************************************************ */
+
+        /* ************************************************************************ */	
+	/**
+	 *  @param String replacementAlgorithm 
+         *  @return int replacementAlgorithmCode
+	 */
+	/* ************************************************************************ */
+        private int verifyReplacementAlgorithm( String replacementAlgorithm ){ 
+        
+            replacementAlgorithm = replacementAlgorithm.toUpperCase();
+
+            if(replacementAlgorithm.compareTo("LRU") == 0){
+                return 0;
+            }
+            
+            if(replacementAlgorithm.compareTo("FIFO") == 0){
+                return 1;
+            }
+
+            // if returns -1 then error
+            return -1;
+            
+        }
+	/* ************************************************************************ */
+
+        /* ************************************************************************ */	
+	/**
+	 *  @param String replacementAlgorithm 
+         *  @return int replacementAlgorithmCode
+	 */
+	/* ************************************************************************ */
+        private int verifyPageTableReplacementAlgorithm( String replacementAlgorithm ){ 
+        
+            replacementAlgorithm = replacementAlgorithm.toUpperCase();
+
+            if(replacementAlgorithm.compareTo("LRU") == 0){
+                return 0;
+            }
+            
+            if(replacementAlgorithm.compareTo("NRU") == 0){
+                return 1;
+            }
+
+            // if returns -1 then error
+            return -1;
+            
+        }
+	/* ************************************************************************ */
+
+
+        /* ************************************************************************ */	
+	/**
+         * Make the conection between caches
+	 */
+	/* ************************************************************************ */
+        private void linkMemoryHierarchy(MainMemory mainMemory, MemoryControl memoryController, VirtualMemory virtualMemory ){ 
+
+            // get total number of caches
+            int totalOfCaches = cacheObjects.size();
+
+            for(int i = 0; i < totalOfCaches; ++i){
+        
+                // get cache object
+                Cache cache = cacheObjects.get(i);
+
+                // get cache Type
+                String cacheType = cache.getType();
+
+                boolean linked = false;
+
+                int j = i + 1;
+
+                // search for cache lower level
+                while( !linked ){
+                
+                    if (j < totalOfCaches){
+                       
+                        // get lower level cache
+                        Cache lowerLevel = cacheObjects.get(j);
+                        
+                        String lowerLevelType = lowerLevel.getType();
+
+                        // compare to verify if this cache is the lower level of the actual cache
+                        if( ( lowerLevelType.compareTo(cacheType) == 0 ) || lowerLevelType.compareTo("UNIFIED") == 0){
+
+                            // linking caches
+                            cache.setLowerMemoryLevel(lowerLevel);
+                            lowerLevel.setUpperMemoryLevel(cache); 
+                            
+                            linked = true;
+                        
+                        }else{
+                            ++j;
+                        }
+
+                    }else{
+                        linked = true;
+                    }
+                   
+                   
+                }
+            }
+               
+            
+            if(cacheExists){
+                // setting lowest cache level ( main memory link )
+                Cache cache = cacheObjects.get( totalOfCaches - 1 );
+
+                // if cache is splitted then configure memoryController to splitted memory
+                if(cache.getType().compareTo("UNIFIED") == 0 ){
+
+                    cache.setLowerMemoryLevel(mainMemory);
+
+                }else{// if cache is splitted then link the 2 lowest memory levels
+                	
+                    // set data Cache lower level
+                    cache.setLowerMemoryLevel(mainMemory);
+                    
+                    // get data cache
+                    Cache dataCache = cacheObjects.get( totalOfCaches - 2 );
+                    
+                    // set data cache lower level
+                    dataCache.setLowerMemoryLevel(mainMemory);
+
+                }
+
+                // setting upper level to cache l1 (null = memory control)
+                cache = cacheObjects.get(0);
+
+                if(cache.getType().compareTo("UNIFIED") == 0){
+                    
+                    // set memory controller as cache upper memory level
+                    cache.setUpperMemoryLevel(null);
+                    
+                    // setting memoryController to unified cache system
+                    memoryController.setDataCache(cache);
+                    memoryController.setInstructionCache(null);
+                }else{
+                	
+                    // set memory controller as data and instruction cache upper memory level
+                    cache.setUpperMemoryLevel(null);
+                    Cache instructionCache = cacheObjects.get( 1 );
+                    instructionCache.setUpperMemoryLevel(null);
+                    
+                    // setting memoryController to splitted cache system
+                    memoryController.setDataCache(cache);
+                    memoryController.setInstructionCache(instructionCache);
+                }
+            }else{
+                // sets no cached system to memory controller
+                memoryController.setDataCache(null);
+                memoryController.setInstructionCache(null);
+            }
+
+            memoryController.setMainMemory(mainMemory);
+            
+            // sets virtual memory system existence
+            if(virtualMemoryExists){
+                memoryController.setVirtualMemory( virtualMemory );
+            }else{// if there is no virtual memory
+                memoryController.setVirtualMemory( null );
+            }
+
+
+        }
+	/* ************************************************************************ */
+
+        /* ************************************************************************ */	
+	/**
+         * Search for cache object in cacheObjects LinkedList
+	 */
+	/* ************************************************************************ */
+        private Cache instanciateCache(Node cacheNode, String cacheType, int wordSize )
+            throws SAXParseException, SAXException, Throwable{
+       
+            // get blockSize node
+            int lineSize = Integer.parseInt( readTag( cacheNode, "lineSize" ) );
+            
+            // get ciclesPerAccess node
+            int ciclesPerAccess = Integer.parseInt( readTag( cacheNode, "ciclesPerAccess" ) );
+
+            // get memorySize node
+            int memorySize = Integer.parseInt( readTag( cacheNode, "memorySize" ) );
+
+             // get associtativityLevel node
+            int associativityLevel = Integer.parseInt( readTag( cacheNode, "associativityLevel" ) );
+
+            // get writePolicy node
+            String writePolicyString = readTag( cacheNode, "writePolicy" ) ;
+            int writePolicy = verifyWritePolicy(writePolicyString);
+
+             // get replacementAlgorithm node
+            String replacementAlgorithmString = readTag( cacheNode, "replacementAlgorithm" );
+            int replacementAlgorithm = verifyReplacementAlgorithm(replacementAlgorithmString);
+
+            // checking mapping function and replacement algorithm
+            if( writePolicy == -1 ){
+            	printer.setError( "Cache mapping function is neither write back nor write through ");
+                return null;
+            }
+            if( replacementAlgorithm == -1 ){
+            	printer.setError( "Cache replacement algorithm is neither FIFO nor LRU ");
+            	return null;
+                
+            }
+
+            
+            // instaciate cache object
+            Cache cacheObject = new Cache(wordSize, lineSize, ciclesPerAccess, memorySize, cacheType, 
+                    associativityLevel, (byte) writePolicy, (byte) replacementAlgorithm );
+            
+
+            return cacheObject;
+        }
+        /* ************************************************************************ */
+
+        
+        /* ************************************************************************ */	
+	/**
+         * Search for cache object in cacheObjects LinkedList
+	 */
+	/* ************************************************************************ */
+        private Cache instanciateTLB(Node TLBNode, String cacheType )
+            throws SAXParseException, SAXException, Throwable{
+       
+            // get ciclesPerAccess node
+            int ciclesPerAccess = Integer.parseInt( readTag( TLBNode, "ciclesPerAccess" ) );
+
+            // get memorySize node
+            int memorySize = Integer.parseInt( readTag( TLBNode, "memorySize" ) );
+
+             // get replacementAlgorithm node
+            String replacementAlgorithmString = readTag( TLBNode, "replacementAlgorithm" );
+            int replacementAlgorithm = verifyReplacementAlgorithm(replacementAlgorithmString);
+
+            // checking replacement algorithm
+            if( replacementAlgorithm == -1 ){
+            	printer.setError( "TLB replacement algorithm is neither FIFO nor LRU ");
+                return null;
+            }
+
+            int associativityLevel = (int) ( memorySize / mainMemory.getBlockSize() );
+            
+            // instaciate tlb object -> mapping function is always write back
+            Cache TLBObject = new Cache(mainMemory.getWordSize(), mainMemory.getBlockSize(), ciclesPerAccess, memorySize, cacheType, 
+                    associativityLevel, (byte) 0, (byte) replacementAlgorithm );
+            
+
+            return TLBObject;
+        }
+        /* ************************************************************************ */
+
+
+
+
+
+
+        /* ************************************************************************ */	
+	/**
+         * Validate memory hierarchy configuration
+         * @return boolean
+	 */
+	/* ************************************************************************ */
+        private boolean memoryHierarchyIsValid( VirtualMemory virtualMemory, MemoryControl memoryControl){
+        
+            int cacheLevel = 0;
+
+            if(cacheExists){
+
+                // testing if all cache objects has a valid memory, line and associativity size
+                // This test consist in checking if all cache objects size are in base 2 set
+                for(int i = 0; i < cacheObjects.size(); ++i){
+
+                    // verify if number is in base 2
+                    boolean validMemorySize = isBaseTwo(cacheObjects.get(i).getMemorySize());
+                    boolean validAssociativityLevel = isBaseTwo(cacheObjects.get(i).getAssociativityLevel());
+                    boolean validLineSize = isBaseTwo(cacheObjects.get(i).getBlockSize());
+
+                    // Verifing cache level ( error message will need it )
+                    String levelId = cacheObjects.get(i).getType();
+
+                    if( (levelId.compareTo("UNIFIED") == 0) || (levelId.compareTo("instructionCache") == 0)  ){
+                        ++cacheLevel;                    
+                    }
+
+
+                    // verifing valid memory size
+                    if( (validMemorySize == false) || ( cacheObjects.get(i).getMemorySize() == 1) ){
+                        String errorMessage = String.format("%s %s %s %d", "Memory size invalid at ", cacheObjects.get(i).getType(), 
+                                "  cache level ", cacheLevel);
+                        printer.setError(errorMessage);
+                        return false;
+                    }
+
+                    // verifing valid associativity level
+                    if( validAssociativityLevel == false ){
+                        String errorMessage = String.format("%s %s %s %d", "Associativity level invalid at ", cacheObjects.get(i).getType(), 
+                                "  cache level ", cacheLevel);
+                        printer.setError(errorMessage);
+                        return false;
+                    }
+
+                    // verifing valid line size
+                    if( validLineSize == false ){
+                        String errorMessage = String.format("%s %s %s %d", "Line size invalid at ", cacheObjects.get(i).getType(), 
+                                "  cache level ", cacheLevel);
+                        printer.setError(errorMessage);
+                        return false;
+                    }
+
+
+                }
+
+
+                // Testing if lower level cache has the same line/block size as main memory
+                int lowerCacheLevel = cacheObjects.size() - 1;
+
+                int cacheLineSize = cacheObjects.get( lowerCacheLevel ).getBlockSize();
+                int mainMemoryBlockSize = mainMemory.getBlockSize();
+
+
+                // if lower memory level is a splitted cache
+                if( cacheObjects.get( lowerCacheLevel ).getType().compareTo("UNIFIED") != 0 ){
+                    int dataCacheLineSize = cacheObjects.get( (lowerCacheLevel - 1) ).getBlockSize();
+
+                    // testing data cache
+                    if( dataCacheLineSize != mainMemoryBlockSize ){
+                        String errorMessage = String.format("%s %s %s %d\n%s", "Incompatible line size at", 
+                                cacheObjects.get( (lowerCacheLevel - 1) ).getType(), " cache level", cacheLevel, "Verifiy main memory block size.");
+                        printer.setError(errorMessage);
+                        return false;
+                    }
+                }
+
+                // testing line size at unified or intruction cache
+                if( cacheLineSize != mainMemoryBlockSize ){
+                    String errorMessage = String.format("%s %s %s %d\n%s", "Incompatible line size at", cacheObjects.get(lowerCacheLevel).getType(), 
+                            " cache level", cacheLevel, "Verifiy main memory block size.");
+                    printer.setError(errorMessage);
+                    return false;
+                }
+
+            }else{ // cache do not exists
+            	
+            	if( mainMemory.getBlockSize() != memoryControl.getBlockSize() ){
+            		  
+                    String errorMessage = String.format("%s\n%s%d%s%d", 
+                    		"Main memory doesnt have same block size as cpu",
+                    		"Found ", mainMemory.getBlockSize(), " when was expected ", 
+                    		memoryControl.getBlockSize() );
+                      
+                    printer.setError(errorMessage);
+                    return false;
+                }
+            }
+
+            
+            if(virtualMemoryExists){
+                     
+            	int pageSize = virtualMemory.getPageSize();
+            	
+            	// testing if pageSize is valid
+            	boolean validPageSize = isBaseTwo(pageSize);
+            	
+            	// verifing valid page size
+                if( (validPageSize == false) ){
+                    printer.setError("Invalid page size");
+                    return false;
+                }
+           
+            }
+            
+            return true;
+        }
+        /* ************************************************************************ */
+
+        /* ************************************************************************ */	
+	/**
+         * Verify if a specified number is in base 2
+         * @param int
+         * @return boolean
+	 */
+	/* ************************************************************************ */
+        private boolean isBaseTwo( int number ){
+
+            // return variable
+            boolean baseTwo = true;
+
+            // string that contains the memory size in binary format
+            String binaryNumber = Integer.toBinaryString( number );
+
+            int sum = 0;
+
+            // 0's and 1's sum
+            for(int j = 0; j < binaryNumber.length(); ++j){
+                
+                sum += Integer.parseInt( new String( (new Character (binaryNumber.charAt(j))).toString()  )  );
+
+            }
+
+            // verifing sum condition
+            // If sum is bigger than 1, than size is incorrect
+            if( (sum != 1) ){
+                baseTwo = false;
+            }
+                
+            return baseTwo;
+
+        }
+        /* ************************************************************************ */
+
+
+}

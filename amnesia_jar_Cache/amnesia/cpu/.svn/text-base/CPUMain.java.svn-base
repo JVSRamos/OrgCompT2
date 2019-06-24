@@ -1,0 +1,299 @@
+package cpu;
+import control.AmnesiaControl;
+import amnesiaCommons.*;
+
+
+
+
+public class CPUMain {
+	
+	
+	Word word = new Word(4);
+	int controlSigns;
+	int i;
+	int address;
+	int state;
+	private String[] contents;
+	
+	
+	//MASKS
+	private final int maskRegDest = 0x06000000;
+	private final int maskALUSourceA = 0x00020000;
+	private final int maskALUSourceB = 0x00600000;
+	private final int maskBNE = 0x00000004;
+	private final int maskMemToReg = 0x0001C000;
+	private final int maskImmOrShamt = 0x00000800;
+	private final int maskPCSource = 0x01800000;
+	private final int maskIorD = 0x00001000;	
+	
+	
+	
+	
+	// OBJECTS.
+//	private AccessInfo accessInfo;	
+	
+	// PROCESSOR OBJECTS 
+	private Multiplexer regDest;
+	private Multiplexer ALUSourceA;
+	private Multiplexer ALUSourceB;
+	private Multiplexer BNE;
+	private Multiplexer memToReg;
+	private Multiplexer immOrShamt;
+	private Multiplexer PCSource;
+	private Multiplexer IorD;
+	private CPUInternalRegisters CPURegisters;
+	private ALUControl ALUControl;
+	private ShiftLeft shiftLeft2or16;
+	private ShiftLeft shiftLeft2;
+	private SignalExtention signalExtention;
+	private MemoryControl memoryControl;
+	private RegistersBank registersBank;
+	private ALU alu;
+	private ControlUnit control;
+	
+	//Observers objects
+	private Observer[] observers; // Observers vector
+	
+	
+	
+	/**
+	 * Contructor
+	 */
+	public CPUMain(){
+		
+		
+		
+		regDest = new Multiplexer(4);
+	    ALUSourceA = new Multiplexer(2);
+	    ALUSourceB = new Multiplexer(4);
+	    BNE = new Multiplexer(2);
+	    memToReg = new Multiplexer(8);
+	    immOrShamt = new Multiplexer(2);
+	    PCSource = new Multiplexer(4);
+	    IorD = new Multiplexer(2); 
+	    shiftLeft2or16 = new ShiftLeft();
+	    shiftLeft2 = new ShiftLeft();
+	    signalExtention = new SignalExtention();
+	    CPURegisters = new CPUInternalRegisters(BNE, IorD, regDest, memToReg, immOrShamt, ALUSourceA, 
+	    		ALUSourceB, PCSource, shiftLeft2);
+	    registersBank = new RegistersBank(32, regDest, memToReg, CPURegisters);
+	    alu = new ALU(BNE, ALUSourceA, ALUSourceB, PCSource, CPURegisters);
+	    ALUControl = new ALUControl(alu, CPURegisters);
+	    control = new ControlUnit(CPURegisters);
+	    memoryControl = new MemoryControl(IorD, CPURegisters, control);
+	    
+	    
+	    
+	    observers = new Observer[16];
+	    
+	    // Filling in the observers vector 
+	    observers[0] = regDest;
+	    observers[1] = ALUSourceA;
+	    observers[2] = ALUSourceB;
+	    observers[3] = BNE;
+	    observers[4] = memToReg;
+	    observers[5] = immOrShamt;
+	    observers[6] = PCSource;
+	    observers[7] = IorD;   
+	    observers[8] = CPURegisters;
+	    observers[9] = signalExtention;
+	    observers[10] = shiftLeft2or16;
+	    observers[11] = memoryControl;
+	    observers[12] =  ALUControl; //realiza algo
+	    observers[13] = registersBank; //realiza algo
+	    
+				
+		regDest.setData(2, 31); // constant 31 in the position 2 of regDest (last register)
+	    ALUSourceB.setData(1, 4); // constant 4 in the position 1 of ALUSourceB
+		
+	    /*
+	    Word address = new Word(wordSize);
+        Word data = new Word(wordSize);
+        BlockLine line = new BlockLine(blockLineSize,wordSize);
+		*/
+	}
+
+	/**
+	 * Method getMemoryControl 
+	 * @param
+	 * this method returns the object of MemoryControl used by this class
+	 * 
+	 */
+	
+	public MemoryControl getMemoryControl(){
+		return memoryControl;
+	}
+	
+
+	/**
+	 * Method cpuMain 
+	 * @param
+	 * This method sends the controlSigns from controlUnit to all the other
+	 * objects. 
+	 * 
+	 */
+	
+	public void cpuMain(){
+
+
+    	do{
+		
+    		// getting the controlSings from controlUnit
+			control.setControlSigns();
+			controlSigns = control.getControlSigns();
+
+				
+			// Updating Observers vector (Multiplexers)
+			observers[0].update((controlSigns & maskRegDest) >>> 25);
+			observers[1].update((controlSigns & maskALUSourceA) >>> 17);
+			observers[2].update((controlSigns & maskALUSourceB) >>> 21);
+			observers[3].update((controlSigns & maskBNE) >>> 2);
+			observers[4].update((controlSigns & maskMemToReg) >>> 14);
+			observers[5].update((controlSigns & maskImmOrShamt) >>> 11);
+			observers[6].update((controlSigns & maskPCSource) >>> 23);
+			observers[7].update((controlSigns & maskIorD) >>> 12);
+
+		
+			for (i = 8; i < 14; ++i){
+				
+				observers[i].update(controlSigns);
+				
+				if (i == 9){ // signalExtension unit update
+					// sending data to signal extention
+					signalExtention.setData(immOrShamt.getData());
+					ALUSourceB.setData(2, signalExtention.getData());
+				}
+				if (i == 10){ // shifLeft unit update
+					// sending data to shift left
+					shiftLeft2or16.setData(signalExtention.getData());
+					ALUSourceB.setData(3, shiftLeft2or16.getData());
+					memToReg.setData(5, shiftLeft2or16.getData());
+					
+				}
+			}// end for	
+			
+			// updating PC address
+			CPURegisters.setPC();
+							
+			// updates the registers values in the end of each state.
+			CPURegisters.refresh();
+			
+		
+			
+			
+		/*	
+			System.out.println("Banco de registradores: ");
+			for (int k = 0; k < 32; k++){
+				Word aux = registersBank.getContent(k);
+				if ( (k + 1) % 8 == 0) System.out.println(aux.getLongValue()+ " ");
+				else System.out.print(registersBank.getContent(k).getLongValue()+ " ");
+				
+			}
+		*/
+			
+		// the processor executes until it finds the 0x00000000 instruction	
+    	}while (CPURegisters.getNewIR().getLongValue() != 0);
+	
+		
+	}//end updates
+
+	
+	
+	/**
+	 * Method getCPUContents 
+	 * @param
+	 * this method creates a String array with all CPU registers contents.
+	 * This method is called during printing the registers values.
+	 * 
+	 */
+	
+	
+	public String[] getCPUContents(){
+		
+		contents = new String[43];
+		int i;
+		
+		// adding registers bank contents in the array.
+		for (i = 0; i < 32; i++){
+			contents[i] = Long.toString( registersBank.getContent(i).getLongValue() );	
+		}
+		
+		contents[32] = "/";
+		
+		// adding internal registers in the array
+		contents[33] = Long.toString( CPURegisters.getPC().getLongValue() );
+		contents[34] = Long.toString( CPURegisters.getIR().getLongValue() );
+		contents[35] = Long.toString( CPURegisters.getMDR().getLongValue() );
+		contents[36] = Long.toString( CPURegisters.getRegA().getLongValue() );
+		contents[37] = Long.toString( CPURegisters.getRegB().getLongValue() );
+		contents[38] = Long.toString( CPURegisters.getALUOut().getLongValue() );
+		contents[39] = Long.toString( CPURegisters.getLo().getLongValue() );
+		contents[40] = Long.toString( CPURegisters.getHi().getLongValue() );
+		
+		contents[41] = "/";
+		contents[42] = Integer.toString(control.getCPUCicles());	
+			
+		return contents;
+		
+	}
+	
+	
+	/**
+	 * Method getCPUInternalRegisters
+	 * @param
+	 * this method creates a String array with CPU InternalRegisters contents.
+	 * This method is called during printing the registers values.
+	 * 
+	 */
+	
+	
+	public String[] getCPUInternalRegisters(){
+		
+		contents = new String[8];
+		
+		// adding internal registers in the array
+		contents[0] = Long.toString( CPURegisters.getPC().getLongValue() );
+		contents[1] = Long.toString( CPURegisters.getIR().getLongValue() );
+		contents[2] = Long.toString( CPURegisters.getMDR().getLongValue() );
+		contents[3] = Long.toString( CPURegisters.getRegA().getLongValue() );
+		contents[4] = Long.toString( CPURegisters.getRegB().getLongValue() );
+		contents[5] = Long.toString( CPURegisters.getALUOut().getLongValue() );
+		contents[6] = Long.toString( CPURegisters.getLo().getLongValue() );
+		contents[7] = Long.toString( CPURegisters.getHi().getLongValue() );
+		
+		return contents;
+		
+	}
+	
+	public String[] getCPUCicles(){
+		
+		contents = new String[1];
+		
+		//contents[0] = contents[42] = Integer.toString(control.getCPUCicles());
+		contents[0] = Integer.toString(control.getCPUCicles());
+		
+		return contents;
+		
+	}
+	
+	public String[] getCPURegisterBank(){
+		
+		contents = new String[32];
+		int i;
+		
+		// adding registers bank contents in the array.
+		for (i = 0; i < 32; i++){
+			contents[i] = Long.toString( registersBank.getContent(i).getLongValue() );	
+		}
+		
+		return contents;
+		
+	}
+	
+	
+	public void setSP(int SP){
+		registersBank.setContent(29, SP);
+		
+	}
+	
+}

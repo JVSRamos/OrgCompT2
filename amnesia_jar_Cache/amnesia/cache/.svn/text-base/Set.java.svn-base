@@ -1,0 +1,368 @@
+/**
+ * Represents the smallest tranfer unit between caches and main memory.
+ */
+package cache;
+import amnesiaCommons.*;
+import java.util.LinkedList;
+
+
+/**
+ * @author Bruno Henrique Oliveira
+ * Alterada em 23/08/07 por Bruno
+ * Alterada em 03/09/07 por Bruno
+ * Alterada em 12/09/07 por Bruno
+ * Alterada em 12/09/07 por Bruno
+ * Alterada em 14/09/07 por Bruno
+ * Alterada em 18/09/07 por Bruno
+ * Alterada em 25/09/07 por Bruno
+ * Alterada em 04/10/07 por Bruno
+ */
+
+public class Set {
+
+	
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	private int associativityLevel;			// sets associticity
+	private long tag[];						// stores associated tag to each block in the set 					
+	private byte flag[];					// stores associated flag to each block in the set
+	private long replacementAlgFlag[];		// for replacement algorith to use
+	private LinkedList<Integer> fifoList;			// FIFO list
+	private Block set[];				// set contents
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */
+	/* FLAGS
+	 * 
+	 * 0x0000000X ---> validation bit   ---> 1 if it is valid, 0 if it's not
+	 * 0x000000X0 ---> modification bit ---> 1 if it is modified, 0 if it's not
+	 * 
+	 * 0x00000000 = 0 ---> not valid and not modified
+	 * 0x00000001 = 1 ---> valid and not modified
+	 * 0x00000010 = 2 ---> not valid and modified  NOT USED ( EU ACHO )
+	 * 0x00000011 = 3 ---> valid and modified
+	 */
+	/* ************************************************************************ */
+	
+	
+	
+	/* ************************************************************************ */
+	// CONSTRUCTOR
+	/* ************************************************************************ */
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for Set
+	 * @param setSize, setAssociativity
+	 */
+	/* ************************************************************************ */
+	public Set( int blockSize, int wordSize, int setAssociativity ){
+		
+		associativityLevel = setAssociativity;
+		set = new Block[ associativityLevel ];
+		tag = new long[ associativityLevel ];
+		flag = new byte[ associativityLevel ];
+		replacementAlgFlag = new long[ associativityLevel ];
+		
+		fifoList = new LinkedList<Integer>();
+		
+		for(int i = 0; i < associativityLevel; ++i){
+			// intanciates all words in the block
+			set[i] = new Block( blockSize, wordSize );
+			
+			// set all flags to state 0
+			flag[i] = 0;
+			
+			// set all replacement algorithm flags to state 0
+			replacementAlgFlag[i] = 0;
+
+                        tag[i] = -1;
+			
+		}
+		
+	}// contructor
+	/* ************************************************************************ */
+
+
+	
+	/* ************************************************************************ */
+	// METHODS
+	/* ************************************************************************ */	
+	/* ************************************************************************ */	
+	/** 
+	 * Returns the position of an empty Block or return -1 if there is no empty
+	 * block on the set
+	 * @return position 
+	 */
+	/* ************************************************************************ */
+	public int searchEmptyBlock(){
+		int position = -1;
+		
+		for( int i = 0; i < associativityLevel; ++i ){
+			
+			if ( set[i].checkEmpty() ){
+				position = i;
+			}
+			
+		}
+		
+		return position;
+	}	
+	/* ************************************************************************ */	
+		
+	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Returns the position of a Block if tag exists in this set
+	 * if it doesn't exists returns -1 
+	 * @param tag
+	 * @return position 
+	 */
+	/* ************************************************************************ */
+	public int searchTag( long tag ){
+		int position = -1;
+		
+		for( int i = 0; i < associativityLevel; ++i ){
+			
+			if ( this.tag[i] == tag ){
+				position = i;
+			}
+			
+		}
+		
+		return position;
+	}	
+	/* ************************************************************************ */
+
+	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Store the block in determined set position 
+	 * @param position, Block
+	 */
+	/* ************************************************************************ */
+	public void setBlock( int position, Block data){
+				
+		set[position].setBlock( data );
+		
+		// mask to set validation bit
+		byte isValid = 1;
+		
+		flag[position] = (byte) (flag[position] | isValid);
+				
+	}	
+	/* ************************************************************************ */
+	
+	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Returns the block stored in determined set position 
+	 * @param position
+	 * @return Block 
+	 */
+	/* ************************************************************************ */
+	public Block getBlock( int position ){
+				
+		return set[position];
+				
+	}	
+	/* ************************************************************************ */
+	
+	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Set flag state to valid and modified to a block 
+	 * @param position
+	 */
+	/* ************************************************************************ */
+	public void setModified( int position ){
+				
+		flag[position] = 3;
+				
+	}	
+	/* ************************************************************************ */
+
+	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Set flag state to valid and not modified to a block 
+	 * @param position
+	 */
+	/* ************************************************************************ */
+	public void setNotModified( int position ){
+				
+		flag[position] = 1;
+				
+	}	
+	/* ************************************************************************ */
+
+
+	/* ************************************************************************ */	
+	/** 
+	 * Check if data in block is valid
+	 * @param position
+	 */
+	/* ************************************************************************ */
+	public boolean isValid( int position ){
+
+		byte mask = 1;    // 0b000000001
+		
+		
+		byte valid = (byte) (flag[position] & mask);
+		
+		// if valid == 1 then validation bit is turned on
+		return (valid == 1 );		
+	}	
+	/* ************************************************************************ */
+		
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Set block to invalid
+	 * @param position
+	 */
+	/* ************************************************************************ */
+	public void setInvalid( int position ){
+
+		byte mask = (byte) 0xFE;
+		
+		flag[position] = (byte) (flag[position] & mask);
+				
+	}	
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Check if block was modified
+	 * @param position
+	 */
+	/* ************************************************************************ */
+	public boolean isModified( int position ){
+
+		byte mask = 2;    // 0b000000010
+		
+		byte modified = 0;
+		
+		modified = (byte) (flag[position] & mask);
+		
+		// if modified == 2 then modified bit is turned on
+		return (modified == 2 );	
+	}	
+	/* ************************************************************************ */
+	
+	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Return position indicated by fifo algorithm
+	 * @return postion
+	 */
+	/* ************************************************************************ */	
+	public int FIFOSelected(){	
+		// recover first added block
+		int position = fifoList.get(0);
+		// remove block position from list
+		fifoList.remove( 0 );
+		// return position
+		return position;
+	}
+	/* ************************************************************************ */
+	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Return position indicated by lru(aging) algorithm
+	 * @return postion
+	 */
+	/* ************************************************************************ */	
+	public int LRUSelected(){
+		int position = 0;
+		
+		// search in array the smallest value for replacement algorithms	
+		for(int i = 1;  i < associativityLevel; ++i){
+			
+			// if data in this block is valid
+			if (isValid(i)){
+				
+				// then checks if value is smaller and bigger than zero
+				if(replacementAlgFlag[position] > replacementAlgFlag[i] && replacementAlgFlag[position] > 0){
+					position = i;
+				}	
+			}
+			
+		}
+
+			
+		return position;
+	}
+	/* ************************************************************************ */
+	
+	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Mark a block used for replacement algorithm control (LRU)
+	 * @param position
+	 */
+	/* ************************************************************************ */	
+	public void markUsedLastAccess(int position){
+		
+		for (int i = 0; i < associativityLevel; ++i){
+			replacementAlgFlag[i] = replacementAlgFlag[i] >>> 1;
+		}
+		
+		// mask to set 1 in the second most significat bit ( signal extension issues )
+		int mask = 0x40000000;
+		
+		// set 1 the most significant 
+		replacementAlgFlag[position] =  mask | replacementAlgFlag[position];
+	}
+	/* ************************************************************************ */	
+	
+	/* ************************************************************************ */	
+	/** 
+	 * Mark a block added in set for replacement algorithm control (FIFO)
+	 * @param position
+	 */
+	/* ************************************************************************ */	
+	public void markAdded(int position){
+		fifoList.add(position);		
+	}
+	/* ************************************************************************ */
+	
+        
+    /* ************************************************************************ */	
+	/** 
+	 * Insert new tag in a tag vector for data control
+	 * @param position
+         * 
+	 */
+	/* ************************************************************************ */	
+	public void insertTag(int position, long tag){
+		this.tag[position] = tag;		
+	}
+	/* ************************************************************************ */
+
+    /* ************************************************************************ */	
+	/** 
+	 * Return tag of determined line
+	 * @return int - tag
+	 */
+	/* ************************************************************************ */	
+    public long getTag(int position){
+    	return tag[position];
+    }
+  	/* ************************************************************************ */
+
+
+    public long getFlag(int position){
+    	return flag[position];
+    }
+    
+}// class Set

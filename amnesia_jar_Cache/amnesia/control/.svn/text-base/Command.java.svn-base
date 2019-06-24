@@ -1,0 +1,308 @@
+package control;
+
+import java.util.ArrayList;
+
+public class Command {
+	
+	// ATRIBUTES
+	private String command;
+	private ArrayList<String> parameters;
+	private ArrayList<Boolean> mandatory;
+	private ArrayList<Boolean> checked;
+	private int code;
+	private String commandDescription;
+	private String parametersDescription;
+	private String mnemonic;
+	
+	public Command(){	
+		// parameters vector
+		parameters = new ArrayList<String>();
+		mandatory = new ArrayList<Boolean>();
+		checked = null;
+	}
+	
+	public Command(String dataIn){
+
+		// parameters vector
+		parameters = new ArrayList<String>();
+
+		// if you're using this constructor you do not need
+		// to know if it is mandatory
+		//mandatory = new Vector<Boolean>();
+		mandatory = null;
+		
+		//mark if parameter was checked
+		checked = new ArrayList<Boolean>();
+
+		
+		// extracting command from string
+		String commandParameters[] = extractCommand(dataIn);
+		
+		// extracting mandatory parameters
+		extractParameters(commandParameters);
+
+	}
+
+
+	public void setCommand(String command){
+		this.command = command;
+	}
+	
+	public void setCode(int code){
+		this.code = code;
+	}
+	
+	public String getCommand(){
+		return command.toUpperCase();
+	}
+
+	public int getCode(){
+		return code;
+	}
+	
+	public String searchParameter(String parameter){
+			
+		// return variable
+		String dataOut = null;
+		
+		// Parameter without flag case
+		if(parameter.startsWith("%s")){
+			if(parameters.size() == 0){
+				
+				return dataOut;
+			}
+			checked.set( 0, true);
+			return parameters.get(0);
+		}
+		
+		// flag that controls the loop
+		boolean parameterFound = false;
+		
+		// flag that helps to control the loop
+		int count = 0;
+		
+		// search for parameter in array
+		while( (!parameterFound) && (count < parameters.size()) ){
+			// get parameter
+			dataOut = parameters.get(count);
+			
+			// compares flag
+			parameterFound = dataOut.startsWith(parameter + " ");
+			
+			// increment counter
+			++count;
+		}
+		
+		if(parameterFound){
+			
+			// mark parameter as checked			
+			checked.set(count -1, true);
+			return dataOut;
+		}else{
+			return null;
+		}
+	}
+	
+	/**
+	 * 
+	 * @param parameter
+	 * @param mandatory
+	 */
+	public void addParameter(String parameter, boolean mandatory){
+		// adding parameter to command
+		parameters.add(parameter);
+		
+		// setting to mandatory or not mandatory
+		this.mandatory.add(mandatory);	
+	}
+
+	/**
+	 * 
+	 * @param index
+	 * @return parameter
+	 */
+	public String getParameter(int index){
+		
+		// checking if parameter is valid
+		if(index >= parameters.size()){
+			return null;
+		}else{
+			return parameters.get(index);
+		}
+		
+	}
+
+	/**
+	 * 
+	 * @param index
+	 * @return
+	 */
+	public boolean isMandatory(int index){		
+		return mandatory.get(index);
+	}
+	
+	
+	/**
+	 * 
+	 * @return
+	 */
+	public int getTotalOfParameters(){
+		return parameters.size();
+	}
+	
+
+	private void extractParameters(String[] commandParameters) {
+		// TODO Auto-generated method stub
+		
+		for(int i = 0; i < commandParameters.length; ++i){
+	
+			// ignoring command, because we want to analyze parameters
+			if(commandParameters[i] != null){
+				
+				// if it is a flag
+				if(commandParameters[i].startsWith("-")){					
+					
+					// adding parameter to parameter vector
+					parameters.add( commandParameters[i] + " " );
+					
+					// mark parameter as not checked
+					checked.add(false);
+					
+				}else{//if it is a flag parameter
+					
+					// checking if there is a flag to assign parameter into
+					if( !parameters.isEmpty() ){
+						
+						// get last parameter
+						String parameter = parameters.get(parameters.size() - 1);
+												
+						// adding parameters to flag
+						parameter = parameter.concat(commandParameters[i] + " ");
+						
+						// changing parameter at vector
+						parameters.set( parameters.size() - 1, parameter);
+						
+					}else{
+						parameters.add( commandParameters[i] + " " );
+						
+						// mark parameter as not checked
+						checked.add(false);
+					}//else -> if( !parameters.isEmpty() ){
+					
+				}//else -> if(commandParameters[i].startsWith("-")){
+				
+			}//if(commandParameters[i] != null){
+						
+		} // for
+		
+	}// method
+
+
+	private String[] extractCommand(String dataIn) {
+		// TODO Auto-generated method stub
+	
+		// split string by space
+		String data[] = dataIn.split("\\ ");
+		
+		if(data.length > 0){
+			// the command should be the first word
+			command = data[0];
+			
+			//excluding from parameter array
+			data[0] = null;
+
+			
+		}
+		
+		return data;
+	}
+	
+	/**
+	 * 
+	 * @return
+	 */
+	public String usage(){
+		
+		if( mandatory == null){
+			return "Impossible to define usage of this parameter";
+		}else{
+			boolean mandatoryControl = false;
+			boolean optionalControl = false;
+			
+			String allParameters = " ";
+						
+			for(int i = 0; i < parameters.size(); ++i){
+				if(mandatory.get(i)){
+					if(!mandatoryControl){
+						allParameters = allParameters.concat("<");
+						mandatoryControl = true;
+					}
+					
+					allParameters = allParameters.concat(parameters.get(i) + " ");
+				}
+			}
+			
+			if(mandatoryControl){
+				allParameters = allParameters.concat("> ");
+			}
+			
+			
+			for(int i = 0; i < parameters.size(); ++i){
+				if(!mandatory.get(i)){
+					if(!optionalControl){
+						allParameters = allParameters.concat("[");
+						optionalControl = true;
+					}
+					
+					allParameters = allParameters.concat(parameters.get(i) + " ");
+				}
+			}
+			
+			if(optionalControl){
+				allParameters = allParameters.concat("]");
+			}
+						
+			return String.format("%s %s" , getCommand(), allParameters);
+		}
+			
+	}
+
+	
+	public boolean allParametersChecked(){
+		
+		for(int i = 0; i < checked.size(); ++i){
+			
+			if(checked.get(i) == false){
+			
+				return false;
+			}
+		}
+		
+		return true;
+	}
+
+	public void setCommandDescription(String commandDescription) {
+		this.commandDescription = commandDescription;
+	}
+
+	public String getCommandDescription() {
+		return commandDescription;
+	}
+
+	public void setParametersDescription(String parametersDescription) {
+		this.parametersDescription = parametersDescription;
+	}
+
+	public String getParametersDescription() {
+		return parametersDescription;
+	}
+
+	public void setMnemonic(String mnemonic) {
+		this.mnemonic = mnemonic;
+	}
+
+	public String getMnemonic() {
+		return mnemonic;
+	}
+	
+}

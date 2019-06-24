@@ -1,0 +1,290 @@
+/**
+ * This class is resposible for all printable data in amnesia
+ * it can print data in a file or screen.
+ */
+package amnesiaCommons;
+
+import cache.Cache;
+import cpu.CPUMain;
+import cpu.MemoryControl;
+import cpu.Multiplexer;
+import virtualMemory.Disk;
+import virtualMemory.VirtualMemory;
+//import java.io.FileWriter;
+//import java.io.*;
+import virtualMemory.PageTable;
+
+
+/**
+ * @author Bruno Henrique Oliveira
+ *
+ */
+public class Printer {
+
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	//private FileWriter logFile;
+    private String dataOut;
+    private String error;
+    private String cpuBuffer;
+    private StringBuffer cacheBuffer;
+    private String mainMemoryBuffer;
+    private String pageTableBuffer;
+    private String diskBuffer;
+    private String[] pauseBuffer;
+	// It always write on log file
+	/* ************************************************************************ */
+	
+
+	/* ************************************************************************ */
+	// CONSTRUCTOR
+	/* ************************************************************************ */
+
+        /* ************************************************************************ */	
+	/**
+	 *	
+	 */
+	/* ************************************************************************ */
+	public Printer(){
+		
+		dataOut = "";
+	    error = "";
+	    cpuBuffer = "";
+	    cacheBuffer = new StringBuffer("");
+	    mainMemoryBuffer = "";
+	    pageTableBuffer = "";
+	    diskBuffer = "";
+	    pauseBuffer = new String[2];
+	    
+	    
+    }// contructor
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 *	
+	 */
+	/* ************************************************************************ */
+	public Printer( String logFileName, int out){ 
+		
+	}// contructor
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 *	Method that print on terminal the cache status
+	 */
+	/* ************************************************************************ */
+	public void cachePrint(Cache cache, int level){
+		if(cache != null){
+			
+			String[][] contents = cache.getCacheContents();
+
+			cacheBuffer.append(cache.getType() + "/" + new Integer(level).toString() + "\n" );
+			
+			for(int x = 0; x < cache.getNumberOfSets(); x++){
+	        
+				for(int y = 0; y < cache.getAssociativityLevel() * (3 + cache.getBlockSize()); y++){
+	        		cacheBuffer.append(" " + contents[x][y]);
+	        		
+	        	}
+
+	        	cacheBuffer.append("\n");
+	        }
+			String statistics = String.format("%f/%d\n", cache.getHitRate(), cache.getNumberOfAccess());
+			
+			cacheBuffer.append(statistics + "////");
+						
+		}else{// EXCESSAO TEM QUE VER AQUI O Q Q FAZ
+			error = "Invalid cache";
+			
+		}
+		
+		
+	}
+	/* ************************************************************************ */
+
+	/* ************************************************************************ */	
+	/**
+	 *	Method that print on terminal the cache status
+	 */
+	/* ************************************************************************ */
+	public void CPUPrint(CPUMain cpu){
+		
+		String registersBank;
+		String internalRegisters;
+		String cycle;
+		
+		registersBank = concatStringArray(cpu.getCPURegisterBank());
+		internalRegisters = concatStringArray(cpu.getCPUInternalRegisters());		
+		cycle = concatStringArray(cpu.getCPUCicles());
+		
+		
+		cpuBuffer = String.format("%s//%s//%s", registersBank, internalRegisters, cycle);
+		
+		
+			
+	}
+	private String concatStringArray(String[] stringArray) {
+		// TODO Auto-generated method stub
+		String concatenatedString = "";
+		
+		for(int i = 0; i < stringArray.length; ++i){
+			concatenatedString = concatenatedString.concat(stringArray[i] + "|");
+		}
+		
+		return concatenatedString;
+	}
+	/* ************************************************************************ */
+	
+
+        public void setDataOut( String dataOut){
+            this.dataOut = dataOut;
+        }
+
+        public String getDataOut(){
+        	String data = dataOut;
+        	dataOut = "";
+            return data;
+        }
+
+		public String getError() {
+			// TODO Auto-generated method stub
+			return error;
+		}
+
+		public void setError(String error) {
+			this.error = error;
+		}
+
+		public String getCpu() {
+			return cpuBuffer;
+		}
+
+		public void setCpuRegisterBank(CPUMain cpuMain) {
+			// TODO Auto-generated method stub
+			cpuBuffer = concatStringArray(cpuMain.getCPURegisterBank());
+									
+		}
+
+		public void setCpuCycle(CPUMain cpuMain) {
+			// TODO Auto-generated method stub
+			cpuBuffer = concatStringArray(cpuMain.getCPUCicles());
+		}
+
+		public void setCpuInternalRegisters(CPUMain cpuMain) {
+			// TODO Auto-generated method stub
+			cpuBuffer = concatStringArray(cpuMain.getCPUInternalRegisters());
+		}
+
+		public String getCacheBuffer() {
+			String cacheString = cacheBuffer.toString();
+			
+			cacheBuffer.delete(0, cacheBuffer.length());
+			
+			return cacheString;
+		}
+
+		public void printMainMemory(MainMemory mainMemory) {
+			// TODO Auto-generated method stub
+			String mainMemoryData[] = mainMemory.getContents(0);
+			
+			mainMemoryBuffer = "";
+			
+			for(int i = 0; i <  mainMemoryData.length-1; ++i){
+				if(i%mainMemory.getBlockSize() == 0 && i > 0){
+					mainMemoryBuffer = mainMemoryBuffer.concat(";");	
+				}
+				
+				mainMemoryBuffer = mainMemoryBuffer.concat(mainMemoryData[i] + " ");
+			}
+			
+		}
+
+		public String getMainMemoryBuffer() {
+			return mainMemoryBuffer;
+		}
+
+		/**
+		 * 
+		 * @param disk
+		 */
+		public void printDisk(Disk disk) {
+			
+			String diskData[] = disk.getContents();
+			diskBuffer = "";
+			
+			if(disk.getContents() != null){
+				for(int i = 0; i < diskData.length; ++i){				
+					
+					diskBuffer = diskBuffer.concat(diskData[i]);
+					
+				}
+			}else{
+				diskBuffer = "null";
+			}
+			
+			
+		}
+		
+		public String getDiskBuffer() {
+			return diskBuffer;
+		}
+
+		public void printPageTable(PageTable pageTable) {
+			
+			//pageTable.print();
+			// TODO Auto-generated method stub
+			String pageTableData[] = pageTable.getContents();
+			
+			pageTableBuffer = "";
+			
+			for(int i = 0; i <  pageTableData.length; ++i){
+				if(i%pageTable.getBlockSize() == 0 && i > 0){
+					pageTableBuffer = pageTableBuffer.concat(";");	
+				}
+				
+				pageTableBuffer = pageTableBuffer.concat(pageTableData[i] + " ");
+			}
+			
+			
+		}
+
+		public String getPageTableBuffer() {
+			return pageTableBuffer;
+		}
+		
+		public String[] getPauseBufferData() {
+			// TODO Auto-generated method stub
+			
+			String buffer[] = pauseBuffer;
+			
+			pauseBuffer = new String[2];
+			
+			return buffer;
+		}
+
+		public void setPauseLocation(String location) {
+			// TODO Auto-generated method stub
+			pauseBuffer[0] = location;
+		}
+		
+		public void setPauseData(String data){
+			pauseBuffer[1] = data;
+		}
+		
+		public String formatHexString(String hexString) {
+			// TODO Auto-generated method stub
+			String invalid0 = "0";
+			String result = "0x";
+			
+			// inserting 0 considering word size representation
+			for(int i = hexString.length(); i < 8; ++i){		
+				hexString = invalid0.concat(hexString);
+			}
+					
+			return result.concat(hexString);
+		}
+		
+}

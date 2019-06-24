@@ -1,0 +1,37 @@
+package cpu;
+import amnesiaCommons.*;
+
+/**
+ * 
+ * @author jordan
+ * alterado em 11/10 por Jordan
+ * atualizado em 17/10 por Jordan
+ */
+
+
+
+public class Register {
+	private Word content;
+	
+	public Register(){
+		content = new Word(4); 
+	}
+	
+	public Word load(){
+		return content;
+	}
+	
+	public void store(Word data){
+		if (data.isUnsigned()){
+			content.setWordUnsigned(data.getLongValue());
+    	}else{
+    		content.setWord(data.getLongValue());
+    	}
+		
+	}
+	
+	public void store(int data){
+		content.setWord(data);
+	}
+	
+}

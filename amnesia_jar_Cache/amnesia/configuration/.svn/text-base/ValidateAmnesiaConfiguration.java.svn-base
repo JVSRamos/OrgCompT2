@@ -1,0 +1,86 @@
+package configuration;
+
+import java.io.*;
+import org.xml.sax.*;
+import javax.xml.parsers.*;
+import javax.xml.transform.*;
+import amnesiaCommons.Printer;
+
+/**
+ * Validates an amnesia xml configuration file against a DTD file
+ */
+public class ValidateAmnesiaConfiguration {
+    
+	private Printer printer;
+    private boolean validConfiguration;
+    
+    public ValidateAmnesiaConfiguration(Printer printer){
+        this.printer = printer;
+    }
+
+    /**
+     * Validate file in string file against amnesia.dtd
+     * @param String - xml file
+     * @return boolean - configuration is valid
+     */    
+    public boolean validateConfiguration(String file) throws Exception  {
+    
+        // default value for error
+        setValidConfiguration(true);
+
+        try{
+            // object that instanciate Documents
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            // set validating flag
+            factory.setValidating(true);
+    
+            // instanciate num document builder
+            DocumentBuilder builder = factory.newDocumentBuilder();
+
+            // set error handler object
+            builder.setErrorHandler(new org.xml.sax.ErrorHandler() {
+                
+                //Ignore the fatal errors
+                public void fatalError(SAXParseException exception)throws SAXException { 
+                    setValidConfiguration(false);
+                }
+                    
+                //Validation errors 
+                public void error(SAXParseException e)throws SAXParseException {
+                    setValidConfiguration(false);
+                }
+        
+                //Show warnings
+                public void warning(SAXParseException err)throws SAXParseException{
+                	setValidConfiguration(false);
+                }
+            });
+       
+            // instanciate xml document
+            //Document xmlDocument = builder.parse(new FileInputStream(file));
+            builder.parse(new FileInputStream(file));
+         //   DOMSource source = new DOMSource(xmlDocument);
+        
+            TransformerFactory tf = TransformerFactory.newInstance();
+            Transformer transformer = tf.newTransformer();
+            
+            // validate xml against dtd
+            transformer.setOutputProperty(OutputKeys.DOCTYPE_SYSTEM, "amnesia.dtd");
+        
+        }catch (Exception e) {
+            String message = e.getMessage();
+            printer.setError(message);
+            return false;
+        }
+        
+        return true;
+    }
+
+	public void setValidConfiguration(boolean validConfiguration) {
+		this.validConfiguration = validConfiguration;
+	}
+
+	public boolean isValidConfiguration() {
+		return validConfiguration;
+	}
+}

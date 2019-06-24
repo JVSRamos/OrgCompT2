@@ -1,0 +1,1067 @@
+package control;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Vector;
+
+import amnesiaCommons.Printer;
+import amnesiaCommons.Word;
+import cpu.CPUMain;
+import cpu.MemoryControl;
+import amnesiaCommons.MainMemory;
+import cache.Cache;
+import virtualMemory.VirtualMemory;
+
+public class AmnesiaControl implements Runnable {
+
+	// Atributes
+	private ServerSocket serverSocket;			// Create sockets for communication
+	private Socket socket;						// Communicates with interface	
+	public static final int PORT = 6565;		// connection port
+	private ValidateCommand validateCommand;	// validate commands from interface
+	private Printer printer;					// data out buffer
+	private String fileName;					// binary file name
+	private boolean binaryFileLoaded;			// binary file flag
+	private CPUMain cpuMain;					// cpu object
+	private MainMemory mainMemory;				// main memory object
+	private VirtualMemory virtualMemory;		// virtual memory object
+	private ArrayList<CacheLevel> cacheObjects;	// represents all cache levels
+	private boolean executionComplete;			// controls when execution was finished
+	private boolean messageSent;				// boolean variable to control message outgoing
+	PrintWriter output;										// output data stream (socket connection)
+	BufferedReader input ;									// input data stream (socket connection)
+	private boolean systemPause;
+	private Vector<String> instructions; //contains all the program file
+	/**
+	 * Set initial server socket for communication with interface
+	 * @param Printer - output buffer 
+	 * 
+	 */
+	public AmnesiaControl(Printer printer){
+		
+		// try to create server socket
+		try {
+			// opening port for connections
+			serverSocket = new ServerSocket(PORT);
+			
+			// setting execution state
+			executionComplete = false;
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		// Validates commands
+		validateCommand = new ValidateCommand(printer);
+		
+		// setting common printer
+		this.printer = printer;
+	
+		// cache array list
+        cacheObjects = new ArrayList<CacheLevel>();
+        
+        // set binary file as not loaded
+        binaryFileLoaded = false;
+        
+        // set control to outgoing messages false
+        messageSent = false;
+        
+        instructions = new Vector<String>();
+	}
+	
+	/**
+	 * Start control object. It waits for interface connection to start communication with amnesia engine
+	 * @Override
+	 */
+	public void run() {
+
+		output = null;
+		input = null;
+		
+		// set cache levels and control reference
+		for(int i = 0; i < cacheObjects.size(); ++i){
+			if(cacheObjects.get(i).getType().compareTo("UNIFIED") == 0){
+				cacheObjects.get(i).getUnifiedCache().setLevel(cacheObjects.get(i).getLevel());				
+				cacheObjects.get(i).getUnifiedCache().setControl(this);
+				
+			}else{
+				cacheObjects.get(i).getDataCache().setLevel(cacheObjects.get(i).getLevel());
+				cacheObjects.get(i).getInstructionCache().setControl(this);
+				
+				cacheObjects.get(i).getInstructionCache().setLevel(cacheObjects.get(i).getLevel());
+				cacheObjects.get(i).getDataCache().setControl(this);
+				
+				
+			}
+		}
+		
+		mainMemory.setControl(this);
+		//checks if virtual memory exists
+		if (virtualMemory!= null){
+			virtualMemory.setControl(this);
+			virtualMemory.getDisk().setControl(this);
+			virtualMemory.getPageTable().setControl(this);
+			//checks if TLB's exist and set control
+			if (virtualMemory.getInstructionTlb()!= null)
+				virtualMemory.getInstructionTlb().setControl(this);
+			if(virtualMemory.getDataTlb()!= null)
+				virtualMemory.getDataTlb().setControl(this);
+		}	
+		cpuMain.getMemoryControl().setControl(this);
+		
+		
+		// TODO Auto-generated method stub
+		try {
+			
+			// create connection
+			socket = serverSocket.accept();
+			
+			// setting input and output parameters
+			output = new PrintWriter(socket.getOutputStream(), true);
+			input = new BufferedReader( new InputStreamReader(socket.getInputStream()));
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		// boolean variable to control execution
+		boolean executing = true;
+		
+	
+		
+		String inputCommand = null;
+		
+		
+		// main loop where all happens		
+		while(executing){
+			
+			// read command from interface
+			try {
+				inputCommand = input.readLine();			
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+			// try to validate command
+			Command command = validateCommand.validate(inputCommand);
+			
+			// check command
+			if(command == null){
+			
+				output.println("commandError");
+			
+			}else{
+				// executing command
+				executing = executeCommand( command, output );
+				
+				if(!messageSent){
+					// send continue message to interface
+					output.println("getMessage");
+				}else{
+					// renew message sent flag
+					messageSent = false;
+				}	
+			}
+			
+			
+		}
+
+		
+		closeConection();
+	}
+
+	/**
+	 * Execute command 
+	 * @param command
+	 * @param output
+	 * @return
+	 */
+	private boolean executeCommand( Command command, PrintWriter output){
+		
+		// decide what to do
+		switch(command.getCode()){
+			case 0: // LOAD PROGRAM
+				if(binaryFileLoaded){
+					// send message to interface to create new configuration
+					output.println("newProgram");
+					
+					// set program name
+					printer.setDataOut(command.getParameter(0));
+					
+					// set messageSent flag to true
+					messageSent = true;
+				}else{
+					// get first parameter (program name)
+					String programName = command.getParameter(0);
+					
+					// load program file into main memory
+					binaryFileLoaded = loadFile( programName );
+					
+					if(binaryFileLoaded){
+						
+						output.println("getMessage");
+						
+					}else{
+						
+						output.println("error");
+						
+					}
+					
+					// set messageSent flag to true
+					messageSent = true;
+				}
+				break;
+			case 1: // MAN
+				Command model = validateCommand.getManPage(command.getParameter(0));
+				String man;
+				
+				if(model != null){					
+					// set man format to command help
+					man = "NAME\n";
+					// setting command description
+					man = man.concat("\t\t" + model.getCommandDescription() + "\n");
+					// setting synopsis				
+					man = man.concat("SYNOPSIS\n\t\t" + model.usage() + "\n");
+					// mnemonics
+					if(model.getMnemonic() != null){
+						man = man.concat("\t\tMnemonic - " + model.getMnemonic() + "\n");
+					}
+					// setting parameters description
+					man = man.concat("DESCRIPTION\n\t\t" + model.getParametersDescription() + "\n");
+				}else{
+					man = "No manual entry for " + command.getParameter(0);
+				}
+				
+				
+				printer.setDataOut(man);
+				break;
+			case 2: // HALT
+				// tem que matar os objetos amnesia aqui tb ??????
+				printer.setDataOut("Halting amnesia system.");
+				// send continue message to interface
+				output.println("halt");
+				return false;
+			case 3: // EXIT
+				
+				printer.setDataOut("Exiting program...");
+				
+				binaryFileLoaded = false;
+				
+				// send continue message to interface
+				output.println("exit");
+				
+				return false;			
+			case 4: // CACHE
+				// test if cache exists
+				if(cacheObjects.size() > 0){
+					
+					// upper and lower limit 
+					int tail = 0;
+					int head = cacheObjects.size() - 1;
+					
+					
+					// testing if there is no parameters
+					if(command.getTotalOfParameters() != 0){
+						
+						// searches for help parameter
+						 if( (command.searchParameter("-h") != null) || 
+						 	 (command.searchParameter("-help") != null) ){
+							 // get model
+							 Command cmd = validateCommand.getManPage(command.getCommand());
+							 // define usage for this parameter
+							 String dataOut = cmd.usage();
+
+							 // additional information
+							 dataOut = dataOut.concat("\nFor additional information try 'man " + 
+									 command.getCommand().toLowerCase() + "'\n");
+							 
+							 // ignoring additional parameters
+							 if(command.getTotalOfParameters() > 1){
+								 dataOut = dataOut.concat("\nIgnoring aditional parameters\n");
+							 }
+							 							 
+							 // setting data out
+							 printer.setDataOut(dataOut);
+							 
+							 // ignoring cache contents
+							 tail = head + 1;
+						 }else{// there is no help parameters
+							 
+							 String parameter = command.searchParameter("-L"); 
+							 // searches for -L parameter
+							 if( parameter != null ) {
+								 // get args
+								 String args[] = parameter.split("\\ ");
+								 
+								 // getting level
+								 int level = Integer.parseInt(args[1]);
+								 
+								 // verifying valid level
+								 if( (level <= 0) || (level > cacheObjects.size())){
+									 // error message
+									 printer.setError("\nInvalid cache level\n");
+									 // ignoring the print loop
+									 tail = head +1;
+									// set messageSent flag to true
+										messageSent = true;
+										
+										output.println("error");
+										return true;
+								 }else{
+									 // vector arrange
+									 level -= 1;
+									 // printing only this cache level 
+									 tail = head = level; 
+								 }
+							 }
+						 }						
+					}
+						
+					// we're going to need this if parameter -T were typed
+					String cacheType = null;
+					boolean typeParameterSet = false;
+					
+					// search for -T
+					String parameter = command.searchParameter("-T");
+					if( parameter != null ) {
+						// get args
+						String args[] = parameter.split("\\ ");
+						 
+						// getting cache type
+						cacheType = args[1].toUpperCase();
+					
+						if( (cacheType.compareTo("UNIFIED") == 0 ) ||
+								(cacheType.compareTo("SPLITTED") == 0) ||
+								(cacheType.compareTo("DATA") == 0) ||
+								(cacheType.compareTo("INSTRUCTION") == 0) ){
+							
+							// setting -T argument avaliable
+							typeParameterSet = true;
+						}else{// ignoring type
+							
+							printer.setDataOut("ignoring parameter -T, invalid cache or level type");
+							
+						}
+						
+						
+					}
+
+					while( tail <= head){
+						// get cache level
+						CacheLevel level = cacheObjects.get(tail);
+						
+						// check for if any type was set
+						if(typeParameterSet){
+							
+							// check level type
+							if(level.getType().compareTo("UNIFIED") == 0){
+								// check parameter
+								if( (cacheType.compareTo("UNIFIED") == 0 ) ||
+									(cacheType.compareTo("DATA") == 0) ||
+									(cacheType.compareTo("INSTRUCTION") == 0) ){
+									
+									// print cache data
+									printer.cachePrint(level.getUnifiedCache(), level.getLevel());
+									
+								}else{
+									printer.setError("Cache Level " + level.getLevel() + " is not splitted");
+									// set messageSent flag to true
+									messageSent = true;
+									
+									output.println("error");
+								}
+							}else{// splitted cache
+								// check data parameter
+								if( (cacheType.compareTo("SPLITTED") == 0 ) ||
+										(cacheType.compareTo("DATA") == 0) ){
+									printer.cachePrint(level.getDataCache(), level.getLevel());									
+								}
+								
+								// check instruction parameter								
+								if( (cacheType.compareTo("SPLITTED") == 0 ) ||
+										(cacheType.compareTo("INSTRUCTION") == 0) ){
+									printer.cachePrint(level.getInstructionCache(), level.getLevel());																
+								}
+								
+								if( (cacheType.compareTo("UNIFIED") == 0 ) ){
+									printer.setError("Cache Level " + level.getLevel() + " is not unified");
+									// set messageSent flag to true
+									messageSent = true;
+									
+									output.println("error");
+								}
+								
+							}
+							
+						}else{// No parameter -T was found
+							// tests if level is unified
+							if(level.getType().compareTo("UNIFIED") == 0){ 
+								printer.cachePrint(level.getUnifiedCache(), level.getLevel());							
+							}else{// splitted level
+								printer.cachePrint(level.getDataCache(), level.getLevel());
+								printer.cachePrint(level.getInstructionCache(), level.getLevel());						
+																
+							}								
+						}
+						++tail;
+					}
+										
+					// set messageSent flag to true
+					messageSent = true;
+					
+					output.println("cache");
+
+				}else{
+					printer.setDataOut("There is no configured cache in this system.");
+					// set messageSent flag to true
+					messageSent = true;
+					
+					output.println("error");
+				}
+				
+				break;
+			case 5: // VIRTUAL MEMORY
+				if(virtualMemory != null){
+					
+					// checking for parameters
+					if(command.getTotalOfParameters() > 0){
+						
+						// help parameters
+						if(command.searchParameter("-h")  != null ||
+							command.searchParameter("-help")  != null){
+
+							 // get model
+							 Command cmd = validateCommand.getManPage(command.getCommand());
+							 // define usage for this parameter
+							 String dataOut = cmd.usage();
+
+							 // additional information
+							 dataOut = dataOut.concat("\nFor additional information try 'man " + 
+									 command.getCommand().toLowerCase() + "'\n");
+							 
+							 // ignoring additional parameters
+							 if(command.getTotalOfParameters() > 1){
+								 dataOut = dataOut.concat("\nIgnoring aditional parameters\n");
+							 }
+							 							 
+							 // setting data out
+							 printer.setDataOut(dataOut);
+
+							
+							// set message flag sent to true
+							messageSent = true;
+							
+							// sending message to interface
+							output.println("getMessage");
+						
+						}else{// parameter different from help
+
+							if(command.searchParameter("-TLB") != null){
+								
+								// used to verify TLB existence
+								String returnMessage = null;
+								
+								// data TLB
+								if(virtualMemory.getDataTlb() != null){
+									printer.cachePrint(virtualMemory.getDataTlb(), 1);
+									returnMessage = "cache";
+									
+								}
+								
+								// Instruction TLB
+								if(virtualMemory.getInstructionTlb() != null){
+									printer.cachePrint(virtualMemory.getInstructionTlb(), 1);
+									returnMessage = "cache";
+								}
+							
+								// if TLB exists tell interface to print cache
+								if(returnMessage != null){
+									output.println(returnMessage);
+								}else{
+									printer.setError("No TLB configured in this system");
+									output.println("error");
+								}
+								
+								
+								messageSent = true;
+							}else{// NO TLB parameter set
+								
+								String returnMessage = "virtualMemory";
+								
+								// disk parameter
+								if(command.searchParameter("-D") != null){
+									// checking disk existence
+									if(virtualMemory.getDisk() != null){
+										printer.printDisk(virtualMemory.getDisk());
+										returnMessage = returnMessage.concat("_d");
+									}
+								}else{// no disk parameter set
+									// disk parameter
+									if(command.searchParameter("-PT") != null){
+										// checking disk existence
+										if(virtualMemory.getPageTable() != null){
+											printer.printPageTable(virtualMemory.getPageTable());
+											returnMessage = returnMessage.concat("_pt");
+										}
+									}
+								}
+								output.println(returnMessage);
+								messageSent = true;
+							}						
+						}						
+						
+					}else{// print all virtual memory objects
+						
+						
+					}
+					
+					
+					
+				}else{
+					printer.setDataOut("There is no virtual memory configured in this system");
+				}
+				
+				break;
+			case 6: // CPU
+				// searches for help parameter
+				 if( (command.searchParameter("-h") != null) || 
+				 	 (command.searchParameter("-help") != null) ){
+
+					 // get model
+					 Command cmd = validateCommand.getManPage(command.getCommand());
+					 // define usage for this parameter
+					 String dataOut = cmd.usage();
+
+					 // additional information
+					 dataOut = dataOut.concat("\nFor additional information try 'man " + 
+							 command.getCommand().toLowerCase() + "'\n");
+					 
+					 // ignoring additional parameters
+					 if(command.getTotalOfParameters() > 1){
+						 dataOut = dataOut.concat("\nIgnoring aditional parameters\n");
+					 }
+					 							 
+					 // setting data out
+					 printer.setDataOut(dataOut);
+				 }else{
+					 String returnMessage = "cpu";
+					 
+					 // search for additional parameters
+					 if( command.searchParameter("-RB") != null){
+						 printer.setCpuRegisterBank(getCPUMain());
+						 
+						 returnMessage = returnMessage.concat("_rb");
+					 }else{
+						 if( command.searchParameter("-C") != null){
+							 printer.setCpuCycle(getCPUMain());
+							 returnMessage = returnMessage.concat("_c");
+						 }else{
+							 if( command.searchParameter("-INT") != null){
+								 printer.setCpuInternalRegisters(getCPUMain());
+								 returnMessage = returnMessage.concat("_int");
+							 }else{
+								 // set data into printer object
+								 printer.CPUPrint(getCPUMain());								
+					
+							 }
+						 } 
+					 }
+					 // send message to interface to create new configuration
+					 output.println(returnMessage);
+					 
+					 // set messageSent flag to true
+					 messageSent = true;			 
+				 }
+								
+				break;
+			case 7: //RUN
+				if(binaryFileLoaded){
+					if(!executionComplete){
+						
+						// setting system not to pause
+						systemPause = false;
+						
+						cpuMain.cpuMain();
+						printer.setDataOut("Execution completed successfully.");
+						
+						// set execution complete
+						executionComplete = true;
+					}else{
+						printer.setDataOut("Execution already completed, try loading a new program.");
+					}
+					// AQUITEM QUE VER O QUE FAZ.. PQ EH FIM DE EXECUCAO
+					// TEM QUE FECHAR TD
+				}else{					
+					printer.setDataOut("File not loaded, try loadprogram command first");
+				}
+				break;
+			case 8: // STEP		
+				if(binaryFileLoaded){
+					if(!executionComplete){
+						
+						// setting system not to pause
+						
+						
+						cpuMain.cpuMain();
+						printer.setDataOut("Execution completed successfully.");
+						
+						// set execution complete
+						executionComplete = true;
+					}else{
+						printer.setDataOut("Execution already completed, try loading a new program.");
+					}
+				}
+				break;
+			case 9: // HELP
+				validateCommand.printCommand();
+				 
+				output.println("help");
+				 
+				 // set messageSent flag to true
+				 messageSent = true;	
+				break;
+			case 10:// Main memory
+				printer.printMainMemory(mainMemory);
+				// send message to interface to create new configuration
+				 output.println("mainMemory");
+				 
+				 // set messageSent flag to true
+				 messageSent = true;	
+				break;
+			case 11:// Statistics
+				String statObj = command.getParameter(0);
+				
+				// collect statistics from stat object
+				String returnMessage = collectStatistics(statObj);
+										
+				output.println( "stats|".concat(returnMessage) );
+				
+				// set messageSent flag to true
+				messageSent = true;
+					
+				
+				break;
+			case 12:// Pause
+				
+				if(command.getParameter(0).startsWith("on")){
+					
+					systemPause = true;
+					
+
+					
+					printer.setDataOut("System set to pause successfully");
+					output.println("getMessage");	
+					
+					
+				}else{
+					if(command.getParameter(0).startsWith("off")){
+						systemPause = false;
+					
+						printer.setDataOut("System set to unpaused execution successfully");
+						output.println("getMessage");
+					}else{
+						printer.setDataOut("Unknown parameter " + command.getParameter(0) + ". Try [on|off].");
+						output.println("error");
+					}
+				}
+								
+					
+				
+				// set messageSent flag to true
+				messageSent = true;
+				break;
+			case 13: //Address
+					
+					break;	
+			default:
+				System.out.println("problemas com o cod de commando");
+				break;
+		
+		}
+		
+		return true;
+	}
+	
+	
+	/**
+	 * Used when one amnesia Object wants to send a single String message to the interface	
+	 * @param String objID - Control uses the object name to tell interface what kind of data it should look for 
+	 * at data out buffer.
+	 * @param String message - message that will be displayed 
+	 */
+	public void pause(String objID, String message){
+
+		if(systemPause){
+			String returnMessage = null;
+			String controlString[] = objID.split("\\|");
+			
+			printer.setPauseLocation(controlString[1]);
+			
+			// Verifying if pause statement was called by cache object
+			if(objID.startsWith("storecache")){
+				
+				
+				if(objID.endsWith("address")){
+				    String address[] = message.split("\n");
+					// aqui tem que formatar os dados pra mandar pra printer
+				    returnMessage = String.format("Address = %s ",address[1]);
+				}
+			}
+			if(objID.startsWith("loadcache")){
+				
+				
+				if(objID.endsWith("address")){
+				    String address[] = message.split("\n");
+					// aqui tem que formatar os dados pra mandar pra printer
+				    returnMessage = String.format("Status = %s\nAddress = %s ",address[1], address[2]);
+				}
+			}
+			else if (objID.startsWith("mainmemory")){
+					String address[] = message.split("\n");
+					// aqui tem que formatar os dados pra mandar pra printer
+				    returnMessage = String.format("Address = %s",address[1]);
+					
+				}
+			else if(objID.startsWith("virtualmemory")){
+				if(objID.endsWith("address")){
+					String address[] = message.split("\n");
+					// aqui tem que formatar os dados pra mandar pra printer
+					returnMessage = String.format("Type = %s\nVirtual Page Number = %s",address[1], address[2]);
+				}
+			}	
+			else if(objID.startsWith("pagetable")){
+					if(objID.endsWith("address")){
+						String address[] = message.split("\n");
+						// aqui tem que formatar os dados pra mandar pra printer
+						returnMessage = String.format("PT Address = %s",address[1]);
+					}
+				}
+			else if(objID.startsWith("memorycontrol")){
+				if(objID.endsWith("address")){
+					String address[] = message.split("\n");
+					// aqui tem que formatar os dados pra mandar pra printer
+					returnMessage = String.format("Virtual address = %s\nPhysical address = %s",address[1],address[2]);
+				}
+			}else if(objID.startsWith("storecache")){
+			    String address[] = message.split("\n");
+				// aqui tem que formatar os dados pra mandar pra printer
+			    returnMessage = String.format("Address = %s",address[1]);
+			}
+			else if(objID.startsWith("disk")){
+				String address[] = message.split("\n");
+				// aqui tem que formatar os dados pra mandar pra printer
+				returnMessage = String.format("Disk address = %s",address[1]);
+		}
+				printer.setPauseData(returnMessage);
+				output.println("pause");
+				interfacePauseComunication();
+		}	
+			
+			
+		
+	}
+			
+				
+	/**
+	 * Communicates with interface when pause mode is activated
+	 */
+   private void interfacePauseComunication(){
+
+		String inputCommand = null;
+		
+		boolean pause = true;
+		
+		do{
+			// read command from interface
+			try {
+				inputCommand = input.readLine();			
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+			// try to validate command
+			Command command = validateCommand.validate(inputCommand);
+			
+			// check command
+			if(command == null){
+			
+				output.println("commandError");
+			
+			}else{
+				// AQUI TEM QUE VER SE O COMANDO EH STEP, RUN, HALT OU EXIT
+				// POIS ESSES TEM TRATAMENTOS ESPECIAIS NESSE TRECHO DO PROGRAMA
+				
+				// AQUI TB NUM PODE TER O LOOP INFINITO TEM QUE OLHAR OS COMANDOS UM 
+				// POR UM E ACERTAR O QUE PRECISA FAZER
+				// check for step command
+				if(command.getCommand().startsWith("STEP") || command.getCommand().startsWith("S") ){
+					return;
+				}else{
+					if(command.getCommand().startsWith("RUN")){
+						systemPause = false;
+						return;
+					}else{
+						if(command.getCommand().startsWith("HALT")){
+							printer.setError("System on pause mode, try execute run command first or disable pause mode");
+							output.println("error");
+						}else{				
+							// executing command
+							executeCommand( command, output );
+							
+							if(!messageSent){
+								// send continue message to interface
+								output.println("getMessage");
+							}else{
+								// renew message sent flag
+								messageSent = false;
+							}
+						}
+					}
+				}
+			}
+		}while(pause);
+}
+
+	/**
+	 * Set binary file name
+	 * @param String fileName - the file name
+	 */
+    public void setFileName( String fileName ){
+        this.fileName = fileName;
+        setBinaryFileLoaded(true);
+    }
+    
+    /**
+     * Check if binary file is loaded.
+     * @param loaded
+     */
+    public void setBinaryFileLoaded( boolean loaded){
+    	binaryFileLoaded = loaded;    
+    }
+	
+    /**
+     * Add cpuMain object to control. This object is responsible for CPU control in a CPU guided simulation.
+     * @param CPUMain
+     */
+    public void addCPUMain( CPUMain cpuMain ){
+        
+        this.cpuMain = cpuMain;
+
+    }
+    
+    /**
+     * Returns the main object of CPU engine.
+     * @return CPUMain
+     */
+    public CPUMain getCPUMain(){
+    	return cpuMain;	
+    }
+    
+    /**
+     * Add main memory object to control. 
+     * @param MainMemory
+     */
+    public void addMainMemory( MainMemory mainMemory ){
+    
+        this.mainMemory = mainMemory;
+
+    }
+    
+    /**
+     * Add virtual memory Object to control.
+     * @param VirtualMemory
+     */
+    public void addVirtualMemory( VirtualMemory virtualMemory ){
+    
+        this.virtualMemory = virtualMemory;
+
+    }
+    
+    /**
+     * Add specific cache to control.
+     * @param Cache
+     */
+    public void addCache( Cache cache ){
+        
+    	if(cache.getType().compareTo("UNIFIED") == 0){
+    		CacheLevel level = new CacheLevel();
+    		level.setUnifiedCache(cache);
+    		cacheObjects.add(level);
+    	}else{
+    		CacheLevel level = new CacheLevel();
+        	
+    		if(cache.getType().compareTo("dataCache") == 0){
+    			 
+        		level.setDataCache(cache);        		
+        		cacheObjects.add(level);
+        		
+    		}else{
+    			level = cacheObjects.get(cacheObjects.size() - 1);
+        		level.setInstructionCache(cache);
+        		cacheObjects.set( (cacheObjects.size() - 1), level);
+    		}
+        
+    	}
+
+    }
+    
+    /**
+     * Invalidate cache levels. When a page is removed from the main memory, all caches must
+     * know about it, so they can make data invalid for future references.
+     * @param Word address - page address
+     * @param int pageSize - page size
+     */
+    public void invalidateCaches( Word address, int pageSize){
+    	for(int i = 0; i < cacheObjects.size(); ++i){
+    		CacheLevel level = cacheObjects.get(i);
+    		if(level.getType().compareTo("UNIFIED") == 0){
+    			level.getUnifiedCache().invalidateBlocks(address, pageSize);
+    		}else{
+    			level.getDataCache().invalidateBlocks(address, pageSize);
+    			level.getInstructionCache().invalidateBlocks(address, pageSize);
+    		}
+    	}
+    }
+    
+    
+    /**
+     * get statistics from amnesia objects
+     * @param statObj
+     * @return
+     */
+    private String collectStatistics(String statObj){
+
+    	statObj = statObj.toUpperCase();
+    		
+		// trying cpu object
+		if(statObj.startsWith("CPU")){
+			
+			String cicles[] = cpuMain.getCPUCicles();
+			
+			System.out.println("CPU Cicles = " + cicles[0]);
+			return statObj;	
+			
+		}
+		
+		// trying main memory object
+		if(statObj.startsWith("MAINMEMORY")){
+			
+			System.out.println("Main memory access = " + mainMemory.getNumberOfAccess());
+			System.out.println("CPU cicles = " + mainMemory.getNumberOfAccess() * mainMemory.getCiclesPerAccess());
+						
+			return statObj;	
+		}
+		
+		// trying virtual memory object
+		if(statObj.startsWith("VIRTUALMEMORY")){
+			
+			System.out.println("Disk access = " + virtualMemory.getDisk().getNumberOfAccess()); 
+			System.out.println("CPU cicles = " + virtualMemory.getDisk().getNumberOfAccess() * virtualMemory.getDisk().getCiclesPerAccess());
+			if (virtualMemory.getDataTlb()!= null){
+				System.out.println("Data TLB access = " + virtualMemory.getDataTlb().getNumberOfAccess());
+				System.out.println("CPU cicles = " + virtualMemory.getDataTlb().getNumberOfAccess() * virtualMemory.getDataTlb().getCiclesPerAccess());
+			 }
+			if (virtualMemory.getInstructionTlb()!= null){
+				System.out.println("Instruction TLB access = " + virtualMemory.getInstructionTlb().getNumberOfAccess());
+				System.out.println("CPU cicles = " + virtualMemory.getInstructionTlb().getNumberOfAccess() * virtualMemory.getDataTlb().getCiclesPerAccess());
+			 }	
+			return statObj;
+		}
+		
+		// trying disk object
+		if(statObj.startsWith("DISK")){
+			System.out.println("Disk access = " + virtualMemory.getDisk().getNumberOfAccess()); 
+			System.out.println("CPU cicles = " + virtualMemory.getDisk().getNumberOfAccess() * virtualMemory.getDisk().getCiclesPerAccess());
+			
+			return statObj;
+		}
+		
+		// trying tlb object
+		if(statObj.startsWith("TLB")){
+			if (virtualMemory.getDataTlb()!= null){
+				System.out.println("Data TLB access = " + virtualMemory.getDataTlb().getNumberOfAccess());
+				System.out.println("CPU cicles = " + virtualMemory.getDataTlb().getNumberOfAccess() * virtualMemory.getDataTlb().getCiclesPerAccess());
+			 }
+			if (virtualMemory.getInstructionTlb()!= null){
+				System.out.println("Instruction TLB access = " + virtualMemory.getInstructionTlb().getNumberOfAccess());
+				System.out.println("CPU cicles = " + virtualMemory.getInstructionTlb().getNumberOfAccess() * virtualMemory.getDataTlb().getCiclesPerAccess());
+			 }	
+			
+			return statObj;
+		}
+		
+		// trying page table object 
+		if(statObj.startsWith("pagetable")){
+		//	if (virtualMemory.getPageTable()!= null){
+			// FALTA O MÉTODO NUMBEROFACCESS DA CLASSE PAGE TABLE 
+			//	System.out.println("Main memory access = " + virtualMemory.);
+			//	System.out.println("CPU cicles = " + virtualMemory.getPageTable().getNumberOfAccess() * virtualMemory.getPageTable().getCiclesPerAccess());
+	    //}	
+			
+			return statObj;
+		}	
+		
+		return "error";
+    }
+    
+    
+    /**
+     * Close socket connection
+     */
+    public void closeConection(){
+    	
+    	try {
+    		
+    		if(cacheObjects != null){
+    			cacheObjects.clear();
+    		}
+    		
+			serverSocket.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    }
+    
+    /**
+     * Load binary file into main memory
+     * @param String - the program file name
+     * @return boolean - true if file was sucessfully loaded, false otherwise.
+     */
+    public boolean loadFile( String programName){
+
+    	this.fileName = programName;
+    	
+    	// create file manager object
+    	FileManager file = new FileManager(mainMemory, virtualMemory ,fileName, printer,instructions);
+    	
+    	// set file data into main memory
+    	if( !file.openFile() ){    			
+    		return false;
+    	}
+    	
+    	if( !file.readFile() ){    		
+    		return false;
+    	}
+    	
+    	file.closeFile();
+    	
+    	return true;
+    }
+
+    
+    public String getInstructionLine(int i){
+    	return (String) instructions.elementAt(i);
+    }	
+	
+}

@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/ProjetoAmnesia/!svn/ver/135/Codigo/src/virtualMemory
+END
+VirtualMemory.java
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/svn/ProjetoAmnesia/!svn/ver/135/Codigo/src/virtualMemory/VirtualMemory.java
+END
+PageTable.java
+K 25
+svn:wc:ra_dav:version-url
+V 72
+/svn/ProjetoAmnesia/!svn/ver/135/Codigo/src/virtualMemory/PageTable.java
+END
+Disk.java
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/ProjetoAmnesia/!svn/ver/135/Codigo/src/virtualMemory/Disk.java
+END
+Page.java
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/ProjetoAmnesia/!svn/ver/109/Codigo/src/virtualMemory/Page.java
+END

@@ -1,0 +1,105 @@
+/**
+ * This class stores all information that Amnesia needs to create log files
+ * and calculate rates. 
+ */
+package amnesiaCommons;
+
+
+/**
+ * @author Bruno Henrique Oliveira, Guilherme Rodrigues Buzo e Jordan Herbert Santos
+ * Alterada em 21/08/07 por Bruno
+ */
+
+public class AccessInfo {
+	
+	/* ************************************************************************ */
+	// PRIVATE ATRIBUTES
+	/* ************************************************************************ */
+	private int totalAccess;
+	private int numberOfMisses;
+	/* **************************************************************************/
+	
+	
+	/* **************************************************************************/
+	// CONSTRUCTOR
+	/* **************************************************************************/
+
+	/* ************************************************************************ */	
+	/**
+	 * Constructor that set all inicial values for statistic proposes
+	 * @param numberOfDataCaches, numberOfIntructionCaches
+	 */
+	/* ************************************************************************ */
+	public AccessInfo(  ){
+		totalAccess = 0;
+		numberOfMisses = 0;				
+	}
+	/* ************************************************************************ */
+
+	
+	
+	/* ************************************************************************ */
+	// METHODS
+	/* ************************************************************************ */
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that increments the number of memory access 
+	 */
+	/* ************************************************************************ */
+	public void incTotalAccess( ){
+		++totalAccess;
+	}
+	/* ************************************************************************ */	
+		
+	/* ************************************************************************ */	
+	/**
+	 * Method that returns the number of access in this memory level 
+	 * @return totalCycles
+	 */
+	/* ************************************************************************ */
+	public int getTotalAccess( ){
+		return totalAccess;
+	}
+	/* ************************************************************************ */
+
+	
+	/* ************************************************************************ */	
+	/**
+	 * Method that increments the number of misses 
+	 */
+	/* ************************************************************************ */
+	public void miss( ){
+		++numberOfMisses;
+	}
+	/* ************************************************************************ */	
+		
+	/* ************************************************************************ */	
+	/**
+	 * Method that returns the number of misses 
+	 * @return int number of misses
+	 */
+	/* ************************************************************************ */
+	public int getNumberOfMisses( ){
+		return numberOfMisses;
+	}
+	/* ************************************************************************ */	
+
+	/* ************************************************************************ */	
+	/**
+	 * Method that returns hit rate 
+	 * @return float hit rate
+	 */
+	/* ************************************************************************ */
+	public float getHitRate( ){
+		if(totalAccess == 0){
+			return 0;
+		}else{
+			
+			return (float) (((float) totalAccess - (float) numberOfMisses)/(float) totalAccess);
+		}
+	}
+	/* ************************************************************************ */
+
+	
+}// class AccessInfo

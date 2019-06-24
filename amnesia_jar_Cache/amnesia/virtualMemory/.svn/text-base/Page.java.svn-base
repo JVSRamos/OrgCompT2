@@ -1,0 +1,66 @@
+/**
+ * 
+ * 
+ * 
+ */
+package virtualMemory;
+
+import amnesiaCommons.Word;
+
+/**
+ * @author Guilherme Rodrigues Buzo, Vinicius Gobbo Antunes de Oliveira
+ */
+public class Page {
+	
+	private int wordSize;
+	int sizeOfPage;
+	private Word[] contents;
+	
+	public Page(int sizeOfPage, int wordSize) {
+		contents = new Word[sizeOfPage];
+		this.sizeOfPage = sizeOfPage;
+		this.wordSize = wordSize;
+		for (int i = 0; i < sizeOfPage; ++i){
+			contents[i] = new Word(wordSize);
+		}
+	}
+	 
+	/**
+	 * Method tha loads data in a given address of the page.
+	 * @param address The address.
+	 * @return The data.
+	 */
+	public Word load(int address){
+		Word data = new Word(wordSize);
+		data.setWord(contents[address].getValue());
+		return data;
+	}	
+	
+	/**
+	 * Method that stores data in a given address of the page.
+	 * @param address The address.
+	 */
+	public void store(int address, Word data){
+
+		contents[address].setWord(data.getValue());
+	
+	}// store
+
+	/**
+	 * Returns the number of words of the page.
+	 * @return The number of words of the page.
+	 */
+	public int getPageSize() {
+		return contents.length;
+	}
+
+	public void printPage(){
+
+		for(int i = 0; i < sizeOfPage; ++i){
+			System.out.print(contents[i].getLongValue() + "\t");
+		}
+		System.out.println();
+		
+	}
+	
+}
