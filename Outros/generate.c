@@ -2,6 +2,22 @@
 #include <stdlib.h>
 #include <time.h>
 
+
+void crescente() {
+
+	int count = 1;
+
+	for (int i = 0; i < 150;i++) {
+		
+		printf("2 %d\n", count);
+		count++;
+		
+	}
+
+}
+
+
+
 void TemporalEspacial() {
 	int streak = 1;
 	int j = 1;
@@ -57,19 +73,19 @@ void Temporal() {
 
 void Espacial() {
 	int streak = 1;
-	int j = 1;
+	int j = 0;
 
 	for(int i = 0; i < 150;i++) {
 
 		int r = (rand() % 512) + 1;
 
-		if (i >= 2+j && i <= 5+j) {
+		if (i >= j && i <= 3+j) {
 			r = streak;
 			streak++;
 		}
 
-		if (i == 5+j) {
-			j += 10;
+		if (i == 3+j) {
+			j += 8;
 		}
 
 		printf("2 %d\n", r);
@@ -79,7 +95,7 @@ void Espacial() {
 int main() {
 	srand(time(NULL));
 
-	TemporalEspacial();
+	crescente();
 	
 	
 	
