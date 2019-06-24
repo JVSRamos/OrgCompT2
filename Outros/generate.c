@@ -63,12 +63,12 @@ void Espacial() {
 
 		int r = (rand() % 512) + 1;
 
-		if (i >= 2+j && i <= 8+j) {
+		if (i >= 2+j && i <= 5+j) {
 			r = streak;
 			streak++;
 		}
 
-		if (i == 8+j) {
+		if (i == 5+j) {
 			j += 10;
 		}
 
@@ -77,9 +77,12 @@ void Espacial() {
 }
 
 int main() {
-	
-	
 	srand(time(NULL));
+
+	TemporalEspacial();
+	
+	
+	
 
 	return 0;
 }
