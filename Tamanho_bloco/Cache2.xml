@@ -23,7 +23,7 @@
 	<Cache>
 		<cacheType>Unified</cacheType>
 		<unifiedCache>
-			<lineSize>4</lineSize>
+			<lineSize>2</lineSize>
 			<ciclesPerAccessRead>1</ciclesPerAccessRead>
 			<ciclesPerAccessWrite>2</ciclesPerAccessWrite>
 			<timeCicle>1</timeCicle>
