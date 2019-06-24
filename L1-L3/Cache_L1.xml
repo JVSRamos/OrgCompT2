@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="ISO-8859-1"?>
+<?xml version="1.0" encoding="ISO-8859-1"?> 
 
 <!DOCTYPE AmnesiaConfiguration SYSTEM "Configuration/amnesia.dtd">
 <?xml-stylesheet type="text/css" href="teste.css"?>
@@ -23,12 +23,12 @@
 	<Cache>
 		<cacheType>Unified</cacheType>
 		<unifiedCache>
-			<lineSize>4</lineSize>
+			<lineSize>2</lineSize>
 			<ciclesPerAccessRead>1</ciclesPerAccessRead>
 			<ciclesPerAccessWrite>2</ciclesPerAccessWrite>
-			<timeCicle>4</timeCicle>
-			<memorySize>32</memorySize>
-			<associativityLevel>4</associativityLevel> <!--Mapeamento por conjunto 4-way-->
+			<timeCicle>2</timeCicle>
+			<memorySize>16</memorySize>
+			<associativityLevel>1</associativityLevel>
 			<writePolicy>WriteThrough</writePolicy>
 			<replacementAlgorithm>FIFO</replacementAlgorithm>
 		</unifiedCache>
