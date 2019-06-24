@@ -26,7 +26,7 @@
 			<lineSize>8</lineSize>
 			<ciclesPerAccessRead>1</ciclesPerAccessRead>
 			<ciclesPerAccessWrite>2</ciclesPerAccessWrite>
-			<timeCicle>1</timeCicle>
+			<timeCicle>4</timeCicle>
 			<memorySize>32</memorySize>
 			<associativityLevel>1</associativityLevel> <!--Mapeamento direto-->
 			<writePolicy>WriteThrough</writePolicy>
