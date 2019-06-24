@@ -14,7 +14,7 @@
 		<wordSize>4</wordSize>
 	</CPU>
 	<MainMemory>
-		<blockSize>4</blockSize>
+		<blockSize>2</blockSize>
 		<memorySize>512</memorySize>
 		<ciclesPerAccessRead>1</ciclesPerAccessRead>
 		<ciclesPerAccessWrite>2</ciclesPerAccessWrite>
